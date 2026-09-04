@@ -154,6 +154,83 @@ export const DEFAULT_QA_STATE: QAState = {
   ],
 };
 
+// Generadores de estado limpio para parejas nuevas (iniciando desde cero)
+export const createFreshCoupleState = (name: string, avatar: string, location: string): CoupleState => ({
+  partner1: {
+    id: 'partner1',
+    name: name || 'Yo',
+    avatar: avatar || '🌸',
+    location: location || 'Nuestro Hogar',
+    timezone: 'GMT+1',
+    statusMessage: '¡Comenzando nuestra casita juntos! 🏡✨',
+    currentMood: {
+      emoji: '🥰',
+      label: 'Feliz & Emocionado/a',
+      energy: 90,
+      note: '¡Acabamos de crear nuestra casita!',
+      updatedAt: new Date().toISOString(),
+      color: '#FFB7B2',
+    },
+  },
+  partner2: {
+    id: 'partner2',
+    name: 'Mi Pareja',
+    avatar: '🐻',
+    location: '',
+    timezone: 'GMT+1',
+    statusMessage: 'Esperando conectarse 💖',
+    currentMood: {
+      emoji: '✨',
+      label: 'Esperando conexión',
+      energy: 80,
+      note: '',
+      updatedAt: new Date().toISOString(),
+      color: '#B5EAD7',
+    },
+  },
+  activePartnerId: 'partner1',
+  relationshipStartDate: new Date().toISOString(),
+  nextMeetupDate: null,
+  loveCoins: 100, // 100 monedas de bienvenida de regalo
+  level: 1,
+  experience: 0,
+  streakDays: 1, // Día 1 de racha juntos
+  loveNotes: [], // Buzón de recuerdos completamente limpio
+  recentInteractions: [],
+});
+
+export const createFreshHouseState = (): HouseState => ({
+  currentRoomId: 'living_room',
+  rooms: {
+    ...DEFAULT_ROOMS,
+    living_room: { ...DEFAULT_ROOMS.living_room, unlocked: true },
+    kitchen: { ...DEFAULT_ROOMS.kitchen, unlocked: false },
+    bedroom: { ...DEFAULT_ROOMS.bedroom, unlocked: false },
+    balcony: { ...DEFAULT_ROOMS.balcony, unlocked: false },
+    garden: { ...DEFAULT_ROOMS.garden, unlocked: false },
+  },
+  placedItems: [], // Vacío: para partir de a poco decorando juntos
+  activityLogs: [
+    {
+      id: 'act_init_' + Date.now(),
+      partnerId: 'partner1',
+      action: 'placed',
+      itemName: 'Inauguración de la Casita',
+      roomName: 'Salón Acogedor',
+      timestamp: new Date().toISOString(),
+      icon: '🏡',
+    }
+  ],
+  inventory: ['rug_heart_pink', 'plant_monstera'], // 2 regalos acogedores de bienvenida listos para colocar
+});
+
+export const createFreshQAState = (): QAState => ({
+  dailyQuestionId: 'q_intimacy_1',
+  activeDeckCategory: 'all',
+  records: {}, // 0 preguntas respondidas, mazo virgen para estrenar
+  customQuestions: [],
+});
+
 // Broadcast channel for multi-tab sync
 const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('hazel_sync_channel')

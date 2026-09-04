@@ -3,7 +3,17 @@ import confetti from 'canvas-confetti';
 import { CoupleState, Partner, PartnerId, LoveNote, InteractionEvent } from '../types/couple';
 import { HouseState, RoomId, Room, PlacedFurniture, FurnitureItem, HouseActivityLog } from '../types/house';
 import { QAState, Question, QuestionAnswerRecord, QuestionCategory } from '../types/qa';
-import { DEFAULT_COUPLE_STATE, DEFAULT_HOUSE_STATE, DEFAULT_QA_STATE, loadStoredData, saveStoredData, subscribeToSync } from '../utils/storage';
+import { 
+  DEFAULT_COUPLE_STATE, 
+  DEFAULT_HOUSE_STATE, 
+  DEFAULT_QA_STATE, 
+  createFreshCoupleState,
+  createFreshHouseState,
+  createFreshQAState,
+  loadStoredData, 
+  saveStoredData, 
+  subscribeToSync 
+} from '../utils/storage';
 import { FURNITURE_CATALOG } from '../data/defaultFurniture';
 import { DEFAULT_QUESTIONS } from '../data/questionDeck';
 import { sound } from '../utils/audio';
@@ -241,16 +251,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     setCurrentUser(newUser);
 
-    // Update partner 1 profile
-    setCouple((prev) => ({
-      ...prev,
-      partner1: {
-        ...prev.partner1,
-        name,
-        avatar,
-        location,
-      },
-    }));
+    // Iniciar con casita limpia desde cero para construir de a poco
+    setCouple(createFreshCoupleState(name, avatar, location));
+    setHouse(createFreshHouseState());
+    setQA(createFreshQAState());
   }, []);
 
   const createCoupleInviteCode = useCallback(() => {
@@ -314,15 +318,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     setCurrentUser(newUser);
 
-    setCouple((prev) => ({
-      ...prev,
-      partner1: {
-        ...prev.partner1,
-        name,
-        avatar,
-        location,
-      },
-    }));
+    // Estado base limpio antes de hidratar con Supabase
+    setCouple(createFreshCoupleState(name, avatar, location));
+    setHouse(createFreshHouseState());
+    setQA(createFreshQAState());
 
     setPairing({
       coupleCode: trimmed,
@@ -346,9 +345,15 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       creatorAvatar: '',
       isLinked: false,
     });
+    setCouple(DEFAULT_COUPLE_STATE);
+    setHouse(DEFAULT_HOUSE_STATE);
+    setQA(DEFAULT_QA_STATE);
     try {
       localStorage.removeItem('hazel_auth_user_v1');
       localStorage.removeItem('hazel_couple_pairing_v1');
+      localStorage.removeItem('hazel_couple_state_v1');
+      localStorage.removeItem('hazel_house_state_v1');
+      localStorage.removeItem('hazel_qa_state_v1');
     } catch (e) {
       console.error('Error clearing auth storage:', e);
     }
@@ -372,6 +377,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isLinked: true,
       linkedAt: new Date().toISOString(),
     });
+    setCouple(DEFAULT_COUPLE_STATE);
+    setHouse(DEFAULT_HOUSE_STATE);
+    setQA(DEFAULT_QA_STATE);
   }, []);
 
   const toggleMute = useCallback(() => {

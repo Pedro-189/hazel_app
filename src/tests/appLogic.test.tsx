@@ -105,6 +105,21 @@ describe('Hazel Couple App Logic & State Flow', () => {
     expect(result.current.pairing.isLinked).toBe(true);
   });
 
+  it('should start brand new houses from scratch with empty rooms and welcome gifts', () => {
+    const { result } = renderHook(() => useCouple(), { wrapper });
+
+    act(() => {
+      result.current.loginUser('Elena', '🌸', 'Madrid, España');
+    });
+
+    expect(result.current.couple.streakDays).toBe(1);
+    expect(result.current.couple.loveCoins).toBe(100);
+    expect(result.current.couple.loveNotes).toHaveLength(0);
+    expect(result.current.house.placedItems).toHaveLength(0);
+    expect(result.current.house.inventory).toContain('rug_heart_pink');
+    expect(Object.keys(result.current.qa.records)).toHaveLength(0);
+  });
+
   it('should switch active partner perspective seamlessly', () => {
     const { result } = renderHook(() => useCouple(), { wrapper });
 
