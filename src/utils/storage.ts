@@ -250,7 +250,11 @@ export const loadStoredData = <T>(key: string, defaultValue: T): T => {
 export const saveStoredData = <T>(key: string, value: T): void => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
     if (syncChannel) {
       syncChannel.postMessage({ type: 'SYNC_UPDATE', key });
     }
