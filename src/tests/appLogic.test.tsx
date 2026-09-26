@@ -11,6 +11,9 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe('Hazel Couple App Logic & State Flow', () => {
   beforeEach(() => {
     localStorage.clear();
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
   });
 
   it('should initialize with default couple, rooms, and over 100 questions', () => {

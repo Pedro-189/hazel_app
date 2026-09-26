@@ -24,7 +24,10 @@ import {
   syncToRemoteCouple, 
   subscribeToRemoteCouple, 
   broadcastFastInteraction,
-  RemoteCoupleRow
+  RemoteCoupleRow,
+  mergeCoupleState,
+  mergeHouseState,
+  mergeQAState
 } from '../utils/supabaseSync';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
 
@@ -101,6 +104,16 @@ const CoupleContext = createContext<CoupleContextValue | null>(null);
 
 export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sessionItem = sessionStorage.getItem('hazel_auth_user_v1');
+        if (sessionItem) {
+          const parsed = JSON.parse(sessionItem);
+          if (parsed && !parsed.role) parsed.role = 'partner1';
+          return parsed;
+        }
+      } catch (_) {}
+    }
     const stored = loadStoredData<UserProfile | null>('hazel_auth_user_v1', null);
     if (stored && !stored.role) {
       return { ...stored, role: 'partner1' };
@@ -130,8 +143,35 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [floatingEffects, setFloatingEffects] = useState<Array<{ id: string; type: string; message?: string }>>([]);
   const [isMuted, setIsMuted] = useState<boolean>(() => sound.isMuted());
 
-  // Save changes to localStorage
+  // Refs for race-condition and echo-loop prevention
+  const isApplyingRemoteRef = React.useRef<boolean>(false);
+  const lastSyncedSnapshotRef = React.useRef<string>('');
+  const deletedFurnitureIdsRef = React.useRef<Map<string, number>>(new Map());
+
+  const getActiveDeletedIds = useCallback((): Set<string> => {
+    const now = Date.now();
+    const active = new Set<string>();
+    deletedFurnitureIdsRef.current.forEach((time, id) => {
+      if (now - time < 60000) {
+        active.add(id);
+      } else {
+        deletedFurnitureIdsRef.current.delete(id);
+      }
+    });
+    return active;
+  }, []);
+
+  // Save changes to localStorage and sessionStorage
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (currentUser) {
+          sessionStorage.setItem('hazel_auth_user_v1', JSON.stringify(currentUser));
+        } else {
+          sessionStorage.removeItem('hazel_auth_user_v1');
+        }
+      } catch (_) {}
+    }
     saveStoredData('hazel_auth_user_v1', currentUser);
   }, [currentUser]);
 
@@ -161,17 +201,16 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // 1. Initial Remote Fetch on load
     fetchRemoteCouple(code).then((remote) => {
       if (remote && isMounted) {
+        isApplyingRemoteRef.current = true;
+        const currentRole = currentUser?.role || 'partner1';
         if (remote.couple_data && Object.keys(remote.couple_data).length > 0) {
-          setCouple((prev) => ({
-            ...remote.couple_data,
-            activePartnerId: currentUser?.role || prev.activePartnerId,
-          }));
+          setCouple((prev) => mergeCoupleState(prev, remote.couple_data, currentRole));
         }
         if (remote.house_data && Object.keys(remote.house_data).length > 0) {
-          setHouse(remote.house_data);
+          setHouse((prev) => mergeHouseState(prev, remote.house_data, getActiveDeletedIds()));
         }
         if (remote.qa_data && Object.keys(remote.qa_data).length > 0) {
-          setQA(remote.qa_data);
+          setQA((prev) => mergeQAState(prev, remote.qa_data, currentRole));
         }
       } else if (!remote && isMounted) {
         // First time room creation in cloud: push initial state
@@ -184,16 +223,19 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       code,
       (remoteRow: RemoteCoupleRow) => {
         if (!isMounted) return;
-        // If the update came from the other partner, sync locally
+        // If the update came from the other partner, merge without losing local work
         if (remoteRow.last_sender_id !== currentUser?.id) {
+          isApplyingRemoteRef.current = true;
+          const currentRole = currentUser?.role || 'partner1';
           if (remoteRow.couple_data) {
-            setCouple((prev) => ({
-              ...remoteRow.couple_data,
-              activePartnerId: currentUser?.role || prev.activePartnerId,
-            }));
+            setCouple((prev) => mergeCoupleState(prev, remoteRow.couple_data, currentRole));
           }
-          if (remoteRow.house_data) setHouse(remoteRow.house_data);
-          if (remoteRow.qa_data) setQA(remoteRow.qa_data);
+          if (remoteRow.house_data) {
+            setHouse((prev) => mergeHouseState(prev, remoteRow.house_data, getActiveDeletedIds()));
+          }
+          if (remoteRow.qa_data) {
+            setQA((prev) => mergeQAState(prev, remoteRow.qa_data, currentRole));
+          }
 
           if (remoteRow.last_interaction) {
             const int = remoteRow.last_interaction;
@@ -229,12 +271,25 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isMounted = false;
       unsubscribe();
     };
-  }, [pairing.coupleCode, currentUser?.id]);
+  }, [pairing.coupleCode, currentUser?.id, currentUser?.role, getActiveDeletedIds]);
 
   // 3. Debounced Auto-Sync of local state updates to Supabase
   useEffect(() => {
     if (!pairing.coupleCode || !isSupabaseConfigured) return;
+
+    if (isApplyingRemoteRef.current) {
+      // Remote changes were just merged, do not echo them back!
+      isApplyingRemoteRef.current = false;
+      return;
+    }
+
+    const payload = JSON.stringify({ couple, house, qa });
+    if (payload === lastSyncedSnapshotRef.current) {
+      return;
+    }
+
     const timer = setTimeout(() => {
+      lastSyncedSnapshotRef.current = payload;
       syncToRemoteCouple(
         pairing.coupleCode,
         couple,
@@ -246,8 +301,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearTimeout(timer);
   }, [couple, house, qa, pairing.coupleCode, currentUser?.id]);
 
-  // Sync across tabs locally as well
+  // Sync across tabs locally as well (only for offline/demo mode without Supabase room code)
   useEffect(() => {
+    if (isSupabaseConfigured && pairing.coupleCode) return;
+
     const unsubscribe = subscribeToSync((key) => {
       if (key === 'hazel_couple_state_v1') {
         setCouple(loadStoredData('hazel_couple_state_v1', DEFAULT_COUPLE_STATE));
@@ -258,7 +315,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     });
     return unsubscribe;
-  }, []);
+  }, [pairing.coupleCode]);
 
   const myRole: PartnerId = currentUser?.role || couple.activePartnerId || 'partner1';
   const activePartner = myRole === 'partner1' ? couple.partner1 : couple.partner2;
@@ -545,6 +602,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setHouse(DEFAULT_HOUSE_STATE);
     setQA(DEFAULT_QA_STATE);
     try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('hazel_auth_user_v1');
+      }
+      deletedFurnitureIdsRef.current.clear();
       localStorage.removeItem('hazel_auth_user_v1');
       localStorage.removeItem('hazel_couple_pairing_v1');
       localStorage.removeItem('hazel_couple_state_v1');
@@ -724,7 +785,15 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ...prev,
       { id: effectId, type, message: customMessage || defaultMsg }
     ]);
-  }, [myRole, couple]);
+
+    if (pairing.coupleCode) {
+      broadcastFastInteraction(pairing.coupleCode, {
+        senderId: currentUser?.id,
+        type,
+        message: customMessage || defaultMsg,
+      });
+    }
+  }, [myRole, couple, pairing.coupleCode, currentUser?.id]);
 
   const addLoveNote = useCallback((text: string, sticker?: string) => {
     sound.playHeartCollect();
@@ -871,11 +940,12 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const moveFurniture = useCallback((placedId: string, x: number, y: number) => {
     sound.playPop();
+    const nowIso = new Date().toISOString();
     setHouse((prev) => ({
       ...prev,
       placedItems: prev.placedItems.map((item) =>
         item.id === placedId
-          ? { ...item, x: Math.max(0, Math.min(8, x)), y: Math.max(0, Math.min(6, y)) }
+          ? { ...item, x: Math.max(0, Math.min(8, x)), y: Math.max(0, Math.min(6, y)), placedAt: nowIso }
           : item
       ),
     }));
@@ -883,31 +953,34 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const rotateFurniture = useCallback((placedId: string) => {
     sound.playPop();
+    const nowIso = new Date().toISOString();
     setHouse((prev) => ({
       ...prev,
       placedItems: prev.placedItems.map((item) => {
         if (item.id !== placedId) return item;
         const nextRotation = ((item.rotation + 90) % 360) as 0 | 90 | 180 | 270;
-        return { ...item, rotation: nextRotation };
+        return { ...item, rotation: nextRotation, placedAt: nowIso };
       }),
     }));
   }, []);
 
   const changeFurnitureLayer = useCallback((placedId: string, delta: number) => {
     sound.playPop();
+    const nowIso = new Date().toISOString();
     setHouse((prev) => ({
       ...prev,
       placedItems: prev.placedItems.map((item) => {
         if (item.id !== placedId) return item;
         const currentLayer = item.layer || 0;
         const nextLayer = Math.max(-5, Math.min(5, currentLayer + delta));
-        return { ...item, layer: nextLayer };
+        return { ...item, layer: nextLayer, placedAt: nowIso };
       }),
     }));
   }, []);
 
   const removeFurniture = useCallback((placedId: string) => {
     sound.playPop();
+    deletedFurnitureIdsRef.current.set(placedId, Date.now());
     setHouse((prev) => ({
       ...prev,
       placedItems: prev.placedItems.filter((item) => item.id !== placedId),
@@ -916,11 +989,12 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const setCustomPhotoOnFrame = useCallback((placedId: string, photoUrl: string, note?: string) => {
     sound.playHeartCollect();
+    const nowIso = new Date().toISOString();
     setHouse((prev) => ({
       ...prev,
       placedItems: prev.placedItems.map((item) =>
         item.id === placedId
-          ? { ...item, customPhotoUrl: photoUrl, customNote: note || item.customNote }
+          ? { ...item, customPhotoUrl: photoUrl, customNote: note || item.customNote, placedAt: nowIso }
           : item
       ),
     }));

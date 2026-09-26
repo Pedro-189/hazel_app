@@ -201,4 +201,94 @@ describe('Hazel Full End-to-End Persistence & Data Integrity Tests', () => {
     const storedPairing = JSON.parse(localStorage.getItem('hazel_couple_pairing_v1') || '{}');
     expect(storedPairing.isLinked).toBe(false);
   });
+
+  it('5. Verifies conflict-free merging when both partners interact with the same house simultaneously', async () => {
+    const { mergeHouseState, mergeCoupleState, mergeQAState } = await import('../utils/supabaseSync');
+
+    // 1. Concurrent Furniture Movement / Placement
+    const now = Date.now();
+    const { DEFAULT_ROOMS } = await import('../data/defaultFurniture');
+    const baseHouse: HouseState = {
+      currentRoomId: 'living_room',
+      inventory: ['sofa_cloud_pink', 'table_wood_round'],
+      rooms: DEFAULT_ROOMS,
+      placedItems: [
+        { id: 'item_sofa', furnitureId: 'sofa_cloud_pink', roomId: 'living_room', x: 2, y: 2, rotation: 0, placedBy: 'partner1', placedAt: new Date(now - 10000).toISOString() },
+        { id: 'item_table', furnitureId: 'table_wood_round', roomId: 'living_room', x: 5, y: 5, rotation: 0, placedBy: 'partner2', placedAt: new Date(now - 10000).toISOString() },
+      ],
+      activityLogs: [],
+    };
+
+    // Partner 1 moved the sofa to (3, 3) at now - 2000
+    const partner1House: HouseState = {
+      ...baseHouse,
+      placedItems: [
+        { id: 'item_sofa', furnitureId: 'sofa_cloud_pink', roomId: 'living_room', x: 3, y: 3, rotation: 0, placedBy: 'partner1', placedAt: new Date(now - 2000).toISOString() },
+        baseHouse.placedItems[1],
+      ],
+    };
+
+    // Partner 2 simultaneously moved the table to (6, 6) at now - 1000
+    const partner2House: HouseState = {
+      ...baseHouse,
+      placedItems: [
+        baseHouse.placedItems[0],
+        { id: 'item_table', furnitureId: 'table_wood_round', roomId: 'living_room', x: 6, y: 6, rotation: 90, placedBy: 'partner2', placedAt: new Date(now - 1000).toISOString() },
+      ],
+    };
+
+    // When Partner 1 receives Partner 2's remote update, it merges:
+    const mergedHouse = mergeHouseState(partner1House, partner2House);
+
+    const mergedSofa = mergedHouse.placedItems.find((p) => p.id === 'item_sofa');
+    const mergedTable = mergedHouse.placedItems.find((p) => p.id === 'item_table');
+
+    // Sofa stayed at (3, 3) (Partner 1's newer position), Table updated to (6, 6) (Partner 2's newer position)! Neither reverted!
+    expect(mergedSofa?.x).toBe(3);
+    expect(mergedSofa?.y).toBe(3);
+    expect(mergedTable?.x).toBe(6);
+    expect(mergedTable?.y).toBe(6);
+    expect(mergedTable?.rotation).toBe(90);
+
+    // 2. Concurrent Q&A Answers
+    const p1QA: QAState = {
+      dailyQuestionId: 'q_love_1',
+      activeDeckCategory: 'intimacy',
+      records: {
+        q_love_1: {
+          id: 'rec_1',
+          questionId: 'q_love_1',
+          partner1Answer: 'Respuesta de Luna 🦊',
+          partner1AnsweredAt: new Date(now - 3000).toISOString(),
+          isRevealed: false,
+          reactions: {},
+          rewardClaimed: false,
+        }
+      },
+      customQuestions: [],
+    };
+
+    const p2QA: QAState = {
+      dailyQuestionId: 'q_love_1',
+      activeDeckCategory: 'intimacy',
+      records: {
+        q_love_1: {
+          id: 'rec_1',
+          questionId: 'q_love_1',
+          partner2Answer: 'Respuesta de Mateo 🐨',
+          partner2AnsweredAt: new Date(now - 1000).toISOString(),
+          isRevealed: false,
+          reactions: {},
+          rewardClaimed: false,
+        }
+      },
+      customQuestions: [],
+    };
+
+    const mergedQA = mergeQAState(p1QA, p2QA, 'partner1');
+    const rec = mergedQA.records['q_love_1'];
+    expect(rec.partner1Answer).toBe('Respuesta de Luna 🦊');
+    expect(rec.partner2Answer).toBe('Respuesta de Mateo 🐨');
+    expect(rec.isRevealed).toBe(true); // Both answered -> automatically revealed!
+  });
 });
