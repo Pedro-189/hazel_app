@@ -32,7 +32,7 @@ export const AnswerModal: React.FC<AnswerModalProps> = ({ question, onClose }) =
   if (!question) return null;
 
   const record = qa.records[question.id];
-  const isPartner1 = couple.activePartnerId === 'partner1';
+  const isPartner1 = activePartner.id === 'partner1';
 
   const myAnswer = isPartner1 ? record?.partner1Answer : record?.partner2Answer;
   const partnerAnswer = isPartner1 ? record?.partner2Answer : record?.partner1Answer;

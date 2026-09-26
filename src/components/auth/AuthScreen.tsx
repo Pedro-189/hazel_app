@@ -13,10 +13,18 @@ import {
   Cloud,
   CloudOff,
   Home,
-  LogIn
+  LogIn,
+  Lock,
+  ArrowLeft,
+  Loader2,
+  ShieldCheck,
+  UserPlus
 } from 'lucide-react';
 import { sound } from '../../utils/audio';
 import { isSupabaseConfigured } from '../../utils/supabaseClient';
+import { fetchRemoteCouple, RemoteCoupleRow } from '../../utils/supabaseSync';
+import { loadStoredData } from '../../utils/storage';
+import { CoupleState, PartnerId } from '../../types/couple';
 
 const AVATARS = ['🌸', '🐻', '🐱', '🦊', '🐰', '🌟', '🍓', '🥑', '🐼', '🐨', '🌻', '🌙'];
 
@@ -26,7 +34,8 @@ export const AuthScreen: React.FC = () => {
   const {
     pairing,
     loginUser,
-    loginWithExistingCode,
+    loginAsExistingPartner,
+    registerAsPartner2,
     createCoupleInviteCode,
     joinCoupleByCode,
     startDemoMode,
@@ -35,27 +44,36 @@ export const AuthScreen: React.FC = () => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [createStep, setCreateStep] = useState<'profile' | 'invite'>('profile');
 
-  // Form states
+  // Create form states
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('🌸');
   const [location, setLocation] = useState('Madrid, España');
-  const [coupleCodeInput, setCoupleCodeInput] = useState('');
+  const [pin, setPin] = useState('');
+
+  // Login form states
+  const [coupleCodeInput, setCoupleCodeInput] = useState(pairing.coupleCode || '');
+  const [isSearching, setIsSearching] = useState(false);
+  const [foundCasita, setFoundCasita] = useState<RemoteCoupleRow | null>(null);
+  const [selectedRole, setSelectedRole] = useState<PartnerId | 'new_partner2' | null>(null);
+  const [loginPin, setLoginPin] = useState('');
+
+  // Partner 2 registration fields
+  const [p2Name, setP2Name] = useState('');
+  const [p2Avatar, setP2Avatar] = useState('🐨');
+  const [p2Location, setP2Location] = useState('');
+  const [p2Pin, setP2Pin] = useState('');
+
   const [errorMessage, setErrorMessage] = useState('');
   const [copied, setCopied] = useState(false);
 
   const currentCode = pairing.coupleCode || 'HAZEL-LOVE24';
 
-  // Handle Login with existing code
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Buscar casita remota o local por código
+  const handleSearchCasita = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
-
-    if (!name.trim()) {
-      setErrorMessage('Por favor ingresa tu nombre');
-      return;
-    }
-
     const code = coupleCodeInput.trim().toUpperCase();
+
     if (!code) {
       setErrorMessage('Por favor ingresa el código de tu casita (ej: HAZEL-LUNA99)');
       return;
@@ -66,13 +84,105 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
-    const success = loginWithExistingCode(name.trim(), avatar, location.trim(), code);
-    if (!success) {
-      setErrorMessage('No se pudo validar el código. Verifica el formato.');
+    setIsSearching(true);
+    sound.playPop();
+
+    try {
+      // 1. Intentar buscar en Supabase
+      const remote = await fetchRemoteCouple(code);
+      if (remote && remote.couple_data) {
+        setFoundCasita(remote);
+        setSelectedRole(null);
+        setLoginPin('');
+        setIsSearching(false);
+        return;
+      }
+
+      // 2. Fallback: verificar si es la casita local guardada
+      const localPairing = loadStoredData<any>('hazel_couple_pairing_v1', null);
+      const localCouple = loadStoredData<CoupleState | null>('hazel_couple_state_v1', null);
+
+      if (localPairing?.coupleCode === code && localCouple) {
+        setFoundCasita({
+          id: code,
+          couple_data: localCouple,
+          house_data: loadStoredData<any>('hazel_house_state_v1', {}),
+          qa_data: loadStoredData<any>('hazel_qa_state_v1', {}),
+          updated_at: new Date().toISOString(),
+        });
+        setSelectedRole(null);
+        setLoginPin('');
+        setIsSearching(false);
+        return;
+      }
+
+      // Si no se encuentra
+      setErrorMessage(`No encontramos ninguna casita con el código "${code}". Verifica que esté bien escrito o crea una casita nueva.`);
+    } catch (err) {
+      setErrorMessage('Ocurrió un error al buscar la casita. Intenta nuevamente.');
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  // Handle Create new couple
+  // Login como Jugador 1 o Jugador 2 existente
+  const handleExistingPartnerLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!foundCasita || !selectedRole || selectedRole === 'new_partner2') return;
+
+    if (!loginPin.trim()) {
+      setErrorMessage('Por favor ingresa tu PIN de 4 dígitos para acceder');
+      return;
+    }
+
+    const result = loginAsExistingPartner(
+      foundCasita.id,
+      selectedRole,
+      loginPin.trim(),
+      foundCasita
+    );
+
+    if (!result.success) {
+      setErrorMessage(result.error || 'PIN incorrecto.');
+    }
+  };
+
+  // Registro de Jugador 2 (Pareja uniéndose por primera vez)
+  const handleRegisterPartner2 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!foundCasita) return;
+
+    if (!p2Name.trim()) {
+      setErrorMessage('Por favor ingresa tu nombre');
+      return;
+    }
+
+    if (!p2Pin.trim() || p2Pin.trim().length < 4) {
+      setErrorMessage('Por favor crea un PIN de 4 dígitos para proteger tu cuenta');
+      return;
+    }
+
+    setIsSearching(true);
+    const result = await registerAsPartner2(
+      foundCasita.id,
+      p2Name.trim(),
+      p2Avatar,
+      p2Location.trim(),
+      p2Pin.trim(),
+      foundCasita
+    );
+    setIsSearching(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error || 'No se pudo vincular como pareja.');
+    }
+  };
+
+  // Handle Create new couple (Jugador 1)
   const handleCreateProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -81,7 +191,12 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
-    loginUser(name.trim(), avatar, location.trim());
+    if (!pin.trim() || pin.trim().length < 4) {
+      setErrorMessage('Por favor crea un PIN personal de 4 dígitos para tu cuenta');
+      return;
+    }
+
+    loginUser(name.trim(), avatar, location.trim(), pin.trim());
     createCoupleInviteCode();
     setCreateStep('invite');
   };
@@ -96,7 +211,7 @@ export const AuthScreen: React.FC = () => {
   const handleShareWhatsApp = () => {
     sound.playPop();
     const text = encodeURIComponent(
-      `¡Hola amor! 💕 Únete a nuestra casita virtual en Hazel con este código: ${currentCode}`
+      `¡Hola amor! 💕 Esta es nuestra casita virtual en Hazel. Entra en https://hazelapp-ashy.vercel.app/ e ingresa este código: ${currentCode}`
     );
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };
@@ -104,6 +219,13 @@ export const AuthScreen: React.FC = () => {
   const handleEnterCreatedRoom = () => {
     joinCoupleByCode(currentCode);
   };
+
+  // Verificar si la pareja 2 ya está registrada en la casita encontrada
+  const isPartner2Registered = Boolean(
+    foundCasita?.couple_data?.partner2?.name &&
+    foundCasita.couple_data.partner2.name !== 'Mi Pareja' &&
+    foundCasita.couple_data.partner2.statusMessage !== 'Esperando conectarse 💖'
+  );
 
   return (
     <div className="min-h-screen bg-stone-900 flex items-center justify-center p-3 sm:p-6 select-none">
@@ -132,7 +254,7 @@ export const AuthScreen: React.FC = () => {
               ) : (
                 <>
                   <CloudOff className="w-3 h-3 text-amber-300" />
-                  <span>Modo Local (Falta conectar Supabase)</span>
+                  <span>Modo Local (Sin Base de Datos)</span>
                 </>
               )}
             </div>
@@ -154,7 +276,7 @@ export const AuthScreen: React.FC = () => {
             }`}
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Iniciar Sesión</span>
+            <span>Entrar a Casita</span>
           </button>
 
           <button
@@ -177,60 +299,22 @@ export const AuthScreen: React.FC = () => {
 
         {/* Dynamic Content */}
         <div className="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
-          {/* ================= MODE 1: INICIAR SESIÓN ================= */}
-          {mode === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-3.5 animate-in fade-in duration-200">
+          {/* ================= MODE 1: ENTRAR A CASITA EXISTENTE ================= */}
+          {mode === 'login' && !foundCasita && (
+            <form onSubmit={handleSearchCasita} className="space-y-4 animate-in fade-in duration-200">
               <div>
                 <h3 className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
                   <LogIn className="w-4 h-4 text-rose-500" />
-                  <span>Entrar a tu Casita Existente</span>
+                  <span>Entrar con Código de Casita</span>
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Ingresa tu código de pareja para retomar tu sesión compartida
+                  Ingresa tu código de pareja para acceder a tu cuenta individual
                 </p>
               </div>
 
-              {/* Avatar Selector */}
-              <div>
-                <label className="text-[11px] font-bold text-stone-600 block mb-1">
-                  Elige tu Avatar Emoji:
-                </label>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {AVATARS.map((em) => (
-                    <button
-                      key={em}
-                      type="button"
-                      onClick={() => setAvatar(em)}
-                      className={`h-10 rounded-2xl text-xl flex items-center justify-center border transition-all ${
-                        avatar === em
-                          ? 'bg-rose-100 border-rose-400 scale-105 shadow-xs'
-                          : 'bg-white border-stone-200 hover:bg-stone-100'
-                      }`}
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Name Input */}
-              <div>
-                <label className="text-[11px] font-bold text-stone-600 block mb-1">
-                  ¿Cómo te llamas o te dice tu pareja?:
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: Luna, Mateo, Mi Amor..."
-                  className="w-full px-3.5 py-2 text-xs border border-stone-200 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-bold"
-                  required
-                />
-              </div>
-
               {/* Couple Code Input */}
-              <div>
-                <label className="text-[11px] font-bold text-stone-600 block mb-1">
+              <div className="bg-gradient-to-br from-rose-50 to-pink-50 p-4 rounded-2xl border border-rose-200/80 space-y-2">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-rose-700 block text-center">
                   Código de tu Casita:
                 </label>
                 <input
@@ -238,13 +322,16 @@ export const AuthScreen: React.FC = () => {
                   value={coupleCodeInput}
                   onChange={(e) => setCoupleCodeInput(e.target.value.toUpperCase())}
                   placeholder="HAZEL-XXXX"
-                  className="w-full px-3.5 py-2.5 text-center text-sm font-mono tracking-wider uppercase border border-stone-200 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-black text-rose-700"
+                  className="w-full px-3.5 py-3 text-center text-lg font-mono tracking-wider uppercase border border-rose-300 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-black text-rose-700 shadow-inner"
                   required
                 />
+                <p className="text-[10px] text-stone-500 text-center">
+                  Ejemplo: <strong>HAZEL-LOVE4727</strong> o el código que te compartió tu pareja.
+                </p>
               </div>
 
               {errorMessage && (
-                <p className="text-[11px] text-red-500 text-center font-bold bg-red-50 p-2 rounded-xl border border-red-200">
+                <p className="text-[11px] text-red-600 text-center font-bold bg-red-50 p-2.5 rounded-xl border border-red-200 leading-relaxed">
                   {errorMessage}
                 </p>
               )}
@@ -252,11 +339,20 @@ export const AuthScreen: React.FC = () => {
               <div className="pt-2 space-y-2">
                 <button
                   type="submit"
-                  disabled={!name.trim() || !coupleCodeInput.trim()}
-                  className="w-full py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-2xl font-bold text-xs shadow-md shadow-rose-200 flex items-center justify-center space-x-1.5 transition-transform active:scale-98"
+                  disabled={!coupleCodeInput.trim() || isSearching}
+                  className="w-full py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-2xl font-bold text-xs shadow-md shadow-rose-200 flex items-center justify-center space-x-2 transition-transform active:scale-98"
                 >
-                  <KeyRound className="w-4 h-4" />
-                  <span>Entrar a Nuestra Casita</span>
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Buscando Casita en Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      <span>Buscar Mi Casita</span>
+                    </>
+                  )}
                 </button>
 
                 <button
@@ -271,7 +367,285 @@ export const AuthScreen: React.FC = () => {
             </form>
           )}
 
-          {/* ================= MODE 2: CREAR NUEVA CASITA ================= */}
+          {/* ================= SUB-PASO 2: SELECCIÓN DE CUENTA INDIVIDUAL & PIN ================= */}
+          {mode === 'login' && foundCasita && (
+            <div className="space-y-3.5 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between pb-1 border-b border-stone-200">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">🏡</span>
+                  <div>
+                    <h3 className="text-xs font-black text-stone-800">
+                      Casita <span className="font-mono text-rose-600">{foundCasita.id}</span>
+                    </h3>
+                    <p className="text-[10px] text-stone-500">¿Quién está entrando a la casita?</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFoundCasita(null);
+                    setSelectedRole(null);
+                    setErrorMessage('');
+                  }}
+                  className="text-[10px] text-rose-600 hover:underline flex items-center space-x-0.5 font-bold"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>Otro código</span>
+                </button>
+              </div>
+
+              {/* Selector de Perfiles */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-stone-600">
+                  Selecciona tu cuenta (cada uno tiene su propio acceso):
+                </p>
+
+                {/* Tarjeta Jugador 1 (Anfitrión) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('partner1');
+                    setErrorMessage('');
+                    setLoginPin('');
+                  }}
+                  className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                    selectedRole === 'partner1'
+                      ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-300 shadow-sm'
+                      : 'bg-white border-stone-200 hover:bg-stone-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-11 h-11 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-2xl shadow-xs">
+                      {foundCasita.couple_data.partner1.avatar}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+                        <span>{foundCasita.couple_data.partner1.name}</span>
+                        <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold">
+                          Jugador 1
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-stone-500 font-medium">
+                        {foundCasita.couple_data.partner1.location || 'Anfitrión de la casita'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-stone-400">
+                    <Lock className="w-3.5 h-3.5 text-stone-400 mr-1" />
+                    <span className="text-[10px] font-bold text-stone-500">Soy yo</span>
+                  </div>
+                </button>
+
+                {/* Tarjeta Jugador 2 (Pareja Registrada O Disponible) */}
+                {isPartner2Registered ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole('partner2');
+                      setErrorMessage('');
+                      setLoginPin('');
+                    }}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                      selectedRole === 'partner2'
+                        ? 'bg-rose-50/80 border-rose-400 ring-2 ring-rose-300 shadow-sm'
+                        : 'bg-white border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-2xl shadow-xs">
+                        {foundCasita.couple_data.partner2.avatar}
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+                          <span>{foundCasita.couple_data.partner2.name}</span>
+                          <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">
+                            Jugador 2
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-medium">
+                          {foundCasita.couple_data.partner2.location || 'Pareja vinculada'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center text-stone-400">
+                      <Lock className="w-3.5 h-3.5 text-stone-400 mr-1" />
+                      <span className="text-[10px] font-bold text-stone-500">Soy yo</span>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole('new_partner2');
+                      setErrorMessage('');
+                    }}
+                    className={`w-full p-3 rounded-2xl border-2 border-dashed text-left flex items-center justify-between transition-all ${
+                      selectedRole === 'new_partner2'
+                        ? 'bg-pink-50 border-rose-400 ring-2 ring-rose-300 shadow-sm'
+                        : 'bg-white border-rose-200 hover:bg-rose-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 border border-rose-200 flex items-center justify-center text-2xl shadow-xs">
+                        ✨
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-rose-700 flex items-center gap-1.5">
+                          <span>¡Unirme como Pareja!</span>
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold">
+                            Disponible
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-medium">
+                          {foundCasita.couple_data.partner1.name} te está esperando
+                        </div>
+                      </div>
+                    </div>
+                    <UserPlus className="w-4 h-4 text-rose-500" />
+                  </button>
+                )}
+              </div>
+
+              {/* Formulario de PIN si seleccionó Partner 1 o Partner 2 existente */}
+              {(selectedRole === 'partner1' || selectedRole === 'partner2') && (
+                <form onSubmit={handleExistingPartnerLogin} className="p-3.5 bg-stone-100/80 rounded-2xl border border-stone-200 space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-rose-500" />
+                      <span>
+                        PIN de acceso para {foundCasita.couple_data[selectedRole].name}:
+                      </span>
+                    </label>
+                  </div>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={loginPin}
+                    onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="PIN de 4 dígitos (ej: 1234)"
+                    className="w-full px-3.5 py-2.5 text-center text-base tracking-widest font-mono border border-stone-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-black text-stone-800 shadow-inner"
+                    required
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-stone-500 text-center">
+                    Cada pareja tiene su propio PIN personal. Nadie más puede acceder a tu cuenta.
+                  </p>
+
+                  <button
+                    type="submit"
+                    disabled={!loginPin.trim()}
+                    className="w-full py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-xl font-bold text-xs shadow-md shadow-rose-200 transition-transform active:scale-98"
+                  >
+                    <span>Entrar como {foundCasita.couple_data[selectedRole].name}</span>
+                  </button>
+                </form>
+              )}
+
+              {/* Formulario de Registro para Pareja 2 si aún no está registrada */}
+              {selectedRole === 'new_partner2' && (
+                <form onSubmit={handleRegisterPartner2} className="p-3.5 bg-gradient-to-br from-rose-50/70 to-pink-50/70 rounded-2xl border border-rose-200 space-y-3 animate-in fade-in">
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-800">
+                      Configura tu Perfil de Jugador 2:
+                    </h4>
+                    <p className="text-[10px] text-stone-500">
+                      Te unirás a la casita de <strong>{foundCasita.couple_data.partner1.name}</strong>
+                    </p>
+                  </div>
+
+                  {/* Avatar Selector */}
+                  <div>
+                    <label className="text-[10px] font-bold text-stone-600 block mb-1">
+                      Elige tu Avatar Emoji:
+                    </label>
+                    <div className="grid grid-cols-6 gap-1">
+                      {AVATARS.map((em) => (
+                        <button
+                          key={em}
+                          type="button"
+                          onClick={() => setP2Avatar(em)}
+                          className={`h-9 rounded-xl text-lg flex items-center justify-center border transition-all ${
+                            p2Avatar === em
+                              ? 'bg-rose-100 border-rose-400 scale-105 shadow-xs'
+                              : 'bg-white border-stone-200 hover:bg-stone-100'
+                          }`}
+                        >
+                          {em}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Name Input */}
+                  <div>
+                    <label className="text-[10px] font-bold text-stone-600 block mb-0.5">
+                      Tu Nombre o Apodo:
+                    </label>
+                    <input
+                      type="text"
+                      value={p2Name}
+                      onChange={(e) => setP2Name(e.target.value)}
+                      placeholder="Ej: Camila, Mateo..."
+                      className="w-full px-3 py-1.5 text-xs border border-stone-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-bold"
+                      required
+                    />
+                  </div>
+
+                  {/* Location Input */}
+                  <div>
+                    <label className="text-[10px] font-bold text-stone-600 block mb-0.5">
+                      Tu Ciudad / País:
+                    </label>
+                    <input
+                      type="text"
+                      value={p2Location}
+                      onChange={(e) => setP2Location(e.target.value)}
+                      placeholder="Ej: Buenos Aires, Argentina"
+                      className="w-full px-3 py-1.5 text-xs border border-stone-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-medium"
+                    />
+                  </div>
+
+                  {/* PIN Input */}
+                  <div>
+                    <label className="text-[10px] font-bold text-stone-700 block mb-0.5 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-rose-500" />
+                      <span>Crea tu PIN de 4 dígitos:</span>
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={p2Pin}
+                      onChange={(e) => setP2Pin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ej: 5678"
+                      className="w-full px-3 py-2 text-center text-sm font-mono tracking-widest border border-stone-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-black text-stone-800"
+                      required
+                    />
+                    <p className="text-[9px] text-stone-500 mt-0.5">
+                      Este PIN asegurará que solo tú puedas entrar a tu perfil de Jugador 2.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!p2Name.trim() || p2Pin.length < 4 || isSearching}
+                    className="w-full py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-xl font-bold text-xs shadow-md shadow-rose-200 transition-transform active:scale-98"
+                  >
+                    <span>¡Unirme a la Casita como Jugador 2! 💕</span>
+                  </button>
+                </form>
+              )}
+
+              {errorMessage && (
+                <p className="text-[11px] text-red-600 text-center font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">
+                  {errorMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ================= MODE 2: CREAR NUEVA CASITA (JUGADOR 1) ================= */}
           {mode === 'create' && createStep === 'profile' && (
             <form onSubmit={handleCreateProfileSubmit} className="space-y-3.5 animate-in fade-in duration-200">
               <div>
@@ -280,7 +654,7 @@ export const AuthScreen: React.FC = () => {
                   <span>Crear Nueva Casita</span>
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Crea tu perfil y te daremos un código único para compartir con tu pareja
+                  Configura tu perfil como <strong>Jugador 1 (Anfitrión)</strong> y tu PIN personal
                 </p>
               </div>
 
@@ -336,6 +710,27 @@ export const AuthScreen: React.FC = () => {
                 />
               </div>
 
+              {/* PIN Input */}
+              <div className="bg-rose-50/70 p-3 rounded-2xl border border-rose-200">
+                <label className="text-[11px] font-bold text-rose-900 block mb-1 flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Crea tu PIN de seguridad (4 dígitos):</span>
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Ej: 1234"
+                  className="w-full px-3.5 py-2 text-center text-sm font-mono tracking-widest border border-rose-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-400 font-black text-rose-700 shadow-inner"
+                  required
+                />
+                <p className="text-[10px] text-stone-500 mt-1 leading-relaxed">
+                  🔒 Este PIN protegerá tu cuenta para que solo tú puedas entrar como Jugador 1.
+                </p>
+              </div>
+
               {errorMessage && (
                 <p className="text-[11px] text-red-500 text-center font-bold">{errorMessage}</p>
               )}
@@ -343,7 +738,7 @@ export const AuthScreen: React.FC = () => {
               <div className="pt-2 space-y-2">
                 <button
                   type="submit"
-                  disabled={!name.trim()}
+                  disabled={!name.trim() || pin.length < 4}
                   className="w-full py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-2xl font-bold text-xs shadow-md shadow-rose-200 flex items-center justify-center space-x-1.5 transition-transform active:scale-98"
                 >
                   <span>Generar Código de Nuestra Casita</span>
@@ -371,19 +766,19 @@ export const AuthScreen: React.FC = () => {
                   <span>¡Casita Creada con Éxito!</span>
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Comparte este código con tu pareja para que se unan
+                  Tú eres el <strong>Jugador 1 (Anfitrión)</strong>. Comparte este código con tu pareja:
                 </p>
               </div>
 
               <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-200 rounded-3xl p-4 text-center space-y-2.5">
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600">
-                  Tu Código Único de Casita
+                  Código Único de Casita
                 </span>
                 <div className="text-2xl font-black text-stone-800 tracking-wider font-mono py-1.5 px-3 bg-white rounded-2xl border border-rose-200 shadow-inner">
                   {currentCode}
                 </div>
                 <p className="text-[11px] text-stone-500 leading-relaxed">
-                  Tu pareja solo debe abrir Hazel, pulsar <strong>"Iniciar Sesión"</strong> y pegar este código.
+                  Tu pareja solo debe entrar a Hazel, ingresar este código y configurar su perfil como <strong>Jugador 2</strong> con su propio PIN.
                 </p>
               </div>
 
@@ -408,8 +803,8 @@ export const AuthScreen: React.FC = () => {
               </div>
 
               <div className="p-3 bg-stone-100 rounded-2xl flex items-center space-x-2 text-[11px] text-stone-600">
-                <div className="w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping shrink-0" />
-                <span>Tu pareja puede unirse ahora o más tarde. Ya puedes entrar a ver tu casita.</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Tu sesión como Jugador 1 está protegida con tu PIN personal.</span>
               </div>
 
               <button
@@ -417,7 +812,7 @@ export const AuthScreen: React.FC = () => {
                 onClick={handleEnterCreatedRoom}
                 className="w-full py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-2xl font-bold text-xs shadow-md shadow-rose-200 flex items-center justify-center space-x-1.5 transition-transform active:scale-98"
               >
-                <span>Entrar a Nuestra Casita</span>
+                <span>Entrar a Mi Casita</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 

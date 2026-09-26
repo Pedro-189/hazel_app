@@ -7,6 +7,7 @@ export interface Partner {
   location: string;
   timezone: string;
   statusMessage: string;
+  pin?: string;
   currentMood: {
     emoji: string;
     label: string;

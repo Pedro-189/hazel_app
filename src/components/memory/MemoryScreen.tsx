@@ -16,6 +16,7 @@ export const MemoryScreen: React.FC = () => {
   const {
     couple,
     pairing,
+    activePartner,
     logoutUser,
     otherPartner,
     addLoveNote,
@@ -385,7 +386,7 @@ export const MemoryScreen: React.FC = () => {
             ) : (
               couple.loveNotes.map((note) => {
                 const sender = note.from === 'partner1' ? couple.partner1 : couple.partner2;
-                const isFromMe = note.from === couple.activePartnerId;
+                const isFromMe = note.from === activePartner.id;
                 const timeStr = new Date(note.createdAt).toLocaleDateString([], {
                   month: 'short',
                   day: 'numeric',

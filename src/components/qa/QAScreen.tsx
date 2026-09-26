@@ -19,7 +19,7 @@ import { TopicRouletteModal } from './TopicRouletteModal';
 import { InfiniteQuestionGeneratorModal } from './InfiniteQuestionGeneratorModal';
 
 export const QAScreen: React.FC = () => {
-  const { allQuestions, qa, couple, otherPartner } = useCouple();
+  const { allQuestions, qa, couple, activePartner, otherPartner } = useCouple();
 
   const [selectedCategory, setSelectedCategory] = useState<QuestionCategory | 'all'>('all');
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(null);
@@ -47,7 +47,7 @@ export const QAScreen: React.FC = () => {
   const dailyRecord = qa.records[dailyQuestion.id];
 
   // Find questions where the OTHER partner has answered, but I haven't yet (Pending Challenge!)
-  const isPartner1 = couple.activePartnerId === 'partner1';
+  const isPartner1 = activePartner.id === 'partner1';
   const pendingChallengeQuestion = allQuestions.find((q) => {
     const rec = qa.records[q.id];
     if (!rec || rec.isRevealed) return false;

@@ -12,7 +12,7 @@ import {
   Cloud,
   CloudOff,
   Heart,
-  ArrowLeftRight,
+  Lock,
   ShieldCheck,
   AlertTriangle
 } from 'lucide-react';
@@ -26,9 +26,8 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) =
   const {
     currentUser,
     pairing,
-    couple,
     activePartner,
-    switchActivePartner,
+    otherPartner,
     logoutUser,
   } = useCouple();
 
@@ -60,11 +59,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) =
     logoutUser();
   };
 
-  const handleTogglePartner = () => {
-    const nextId = couple.activePartnerId === 'partner1' ? 'partner2' : 'partner1';
-    switchActivePartner(nextId);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200 select-none">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[90vh]">
@@ -77,7 +71,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) =
                 <span>Mi Cuenta</span>
                 <Heart className="w-3.5 h-3.5 fill-rose-200 text-rose-200" />
               </h2>
-              <p className="text-[10px] text-rose-100 font-medium">Gestión de sesión y casita</p>
+              <p className="text-[10px] text-rose-100 font-medium">Gestión de sesión individual</p>
             </div>
           </div>
           <button
@@ -90,32 +84,31 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, onClose }) =
 
         {/* Body Content */}
         <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
-          {/* User Profile Card */}
-          <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-2xl flex items-center justify-between">
+          {/* User Profile Card (Locked to user) */}
+          <div className="p-3.5 bg-stone-50 border border-stone-200/80 rounded-2xl flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-2xl shadow-xs">
-                {currentUser?.avatar || activePartner.avatar}
+                {activePartner.avatar}
               </div>
               <div>
                 <div className="text-xs font-black text-stone-800">
-                  {currentUser?.name || activePartner.name}
+                  {activePartner.name}
                 </div>
                 <div className="text-[10px] text-stone-500 font-medium">
-                  {currentUser?.location || activePartner.location}
+                  {activePartner.location || 'Casita de Amor'}
                 </div>
-                <div className="text-[9px] text-rose-600 font-bold mt-0.5">
-                  Perspectiva actual: {activePartner.name}
+                <div className="text-[10px] font-bold text-rose-600 mt-0.5 flex items-center gap-1">
+                  <span>{activePartner.id === 'partner1' ? 'Jugador 1 (Anfitrión)' : 'Jugador 2 (Pareja)'}</span>
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={handleTogglePartner}
-              title="Cambiar perspectiva de vista"
-              className="p-2 bg-white hover:bg-rose-50 border border-stone-200 rounded-xl text-stone-600 hover:text-rose-600 shadow-xs transition-colors flex items-center space-x-1"
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <Lock className="w-2.5 h-2.5" />
+                <span>PIN Activo</span>
+              </span>
+            </div>
           </div>
 
           {/* Couple Code Box */}

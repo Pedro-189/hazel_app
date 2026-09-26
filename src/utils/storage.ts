@@ -18,6 +18,7 @@ export const DEFAULT_COUPLE_STATE: CoupleState = {
     location: 'Barcelona, España',
     timezone: 'GMT+2',
     statusMessage: 'Contando los días para vernos ✨',
+    pin: '1234',
     currentMood: {
       emoji: '🥰',
       label: 'Enamorada & Acogedora',
@@ -34,6 +35,7 @@ export const DEFAULT_COUPLE_STATE: CoupleState = {
     location: 'Buenos Aires, Argentina',
     timezone: 'GMT-3',
     statusMessage: 'Trabajando con nuestra playlist de fondo 🎶',
+    pin: '1234',
     currentMood: {
       emoji: '✨',
       label: 'Motivado & Te Extraño',
@@ -155,7 +157,12 @@ export const DEFAULT_QA_STATE: QAState = {
 };
 
 // Generadores de estado limpio para parejas nuevas (iniciando desde cero)
-export const createFreshCoupleState = (name: string, avatar: string, location: string): CoupleState => ({
+export const createFreshCoupleState = (
+  name: string,
+  avatar: string,
+  location: string,
+  pin: string = '1234'
+): CoupleState => ({
   partner1: {
     id: 'partner1',
     name: name || 'Yo',
@@ -163,6 +170,7 @@ export const createFreshCoupleState = (name: string, avatar: string, location: s
     location: location || 'Nuestro Hogar',
     timezone: 'GMT+1',
     statusMessage: '¡Comenzando nuestra casita juntos! 🏡✨',
+    pin: pin || '1234',
     currentMood: {
       emoji: '🥰',
       label: 'Feliz & Emocionado/a',
@@ -179,6 +187,7 @@ export const createFreshCoupleState = (name: string, avatar: string, location: s
     location: '',
     timezone: 'GMT+1',
     statusMessage: 'Esperando conectarse 💖',
+    pin: '',
     currentMood: {
       emoji: '✨',
       label: 'Esperando conexión',

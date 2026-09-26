@@ -43,8 +43,22 @@ interface CoupleContextValue {
   // Auth & Pairing
   currentUser: UserProfile | null;
   pairing: CouplePairing;
-  loginUser: (name: string, avatar: string, location: string) => void;
-  loginWithExistingCode: (name: string, avatar: string, location: string, coupleCode: string) => boolean;
+  loginUser: (name: string, avatar: string, location: string, pin?: string) => void;
+  loginWithExistingCode: (name: string, avatar: string, location: string, coupleCode: string, pin?: string) => boolean;
+  loginAsExistingPartner: (
+    coupleCode: string,
+    role: PartnerId,
+    pin: string,
+    remoteData?: RemoteCoupleRow | null
+  ) => { success: boolean; error?: string };
+  registerAsPartner2: (
+    coupleCode: string,
+    name: string,
+    avatar: string,
+    location: string,
+    pin: string,
+    remoteData?: RemoteCoupleRow | null
+  ) => Promise<{ success: boolean; error?: string }>;
   createCoupleInviteCode: () => string;
   joinCoupleByCode: (code: string) => boolean;
   logoutUser: () => void;
@@ -86,9 +100,13 @@ interface CoupleContextValue {
 const CoupleContext = createContext<CoupleContextValue | null>(null);
 
 export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() =>
-    loadStoredData<UserProfile | null>('hazel_auth_user_v1', null)
-  );
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const stored = loadStoredData<UserProfile | null>('hazel_auth_user_v1', null);
+    if (stored && !stored.role) {
+      return { ...stored, role: 'partner1' };
+    }
+    return stored;
+  });
 
   const [pairing, setPairing] = useState<CouplePairing>(() =>
     loadStoredData<CouplePairing>('hazel_couple_pairing_v1', {
@@ -144,7 +162,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     fetchRemoteCouple(code).then((remote) => {
       if (remote && isMounted) {
         if (remote.couple_data && Object.keys(remote.couple_data).length > 0) {
-          setCouple(remote.couple_data);
+          setCouple((prev) => ({
+            ...remote.couple_data,
+            activePartnerId: currentUser?.role || prev.activePartnerId,
+          }));
         }
         if (remote.house_data && Object.keys(remote.house_data).length > 0) {
           setHouse(remote.house_data);
@@ -165,7 +186,12 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!isMounted) return;
         // If the update came from the other partner, sync locally
         if (remoteRow.last_sender_id !== currentUser?.id) {
-          if (remoteRow.couple_data) setCouple(remoteRow.couple_data);
+          if (remoteRow.couple_data) {
+            setCouple((prev) => ({
+              ...remoteRow.couple_data,
+              activePartnerId: currentUser?.role || prev.activePartnerId,
+            }));
+          }
           if (remoteRow.house_data) setHouse(remoteRow.house_data);
           if (remoteRow.qa_data) setQA(remoteRow.qa_data);
 
@@ -234,13 +260,14 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return unsubscribe;
   }, []);
 
-  const activePartner = couple.activePartnerId === 'partner1' ? couple.partner1 : couple.partner2;
-  const otherPartner = couple.activePartnerId === 'partner1' ? couple.partner2 : couple.partner1;
+  const myRole: PartnerId = currentUser?.role || couple.activePartnerId || 'partner1';
+  const activePartner = myRole === 'partner1' ? couple.partner1 : couple.partner2;
+  const otherPartner = myRole === 'partner1' ? couple.partner2 : couple.partner1;
 
   const allQuestions = [...DEFAULT_QUESTIONS, ...qa.customQuestions];
   const furnitureCatalog = FURNITURE_CATALOG;
 
-  const loginUser = useCallback((name: string, avatar: string, location: string) => {
+  const loginUser = useCallback((name: string, avatar: string, location: string, pin: string = '1234') => {
     sound.playPop();
     const newUser: UserProfile = {
       id: 'usr_' + Date.now(),
@@ -248,11 +275,13 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       avatar,
       location,
       timezone: 'GMT+1',
+      role: 'partner1',
+      pin: pin || '1234',
     };
     setCurrentUser(newUser);
 
     // Iniciar con casita limpia desde cero para construir de a poco
-    setCouple(createFreshCoupleState(name, avatar, location));
+    setCouple(createFreshCoupleState(name, avatar, location, pin));
     setHouse(createFreshHouseState());
     setQA(createFreshQAState());
   }, []);
@@ -297,7 +326,13 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return true;
   }, []);
 
-  const loginWithExistingCode = useCallback((name: string, avatar: string, location: string, coupleCode: string): boolean => {
+  const loginWithExistingCode = useCallback((
+    name: string,
+    avatar: string,
+    location: string,
+    coupleCode: string,
+    pin: string = '1234'
+  ): boolean => {
     const trimmed = coupleCode.trim().toUpperCase();
     if (!trimmed.startsWith('HAZEL-') || trimmed.length < 6) return false;
 
@@ -315,11 +350,13 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       avatar,
       location,
       timezone: 'GMT+1',
+      role: 'partner1',
+      pin: pin || '1234',
     };
     setCurrentUser(newUser);
 
     // Estado base limpio antes de hidratar con Supabase
-    setCouple(createFreshCoupleState(name, avatar, location));
+    setCouple(createFreshCoupleState(name, avatar, location, pin));
     setHouse(createFreshHouseState());
     setQA(createFreshQAState());
 
@@ -335,6 +372,165 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return true;
   }, []);
+
+  const loginAsExistingPartner = useCallback((
+    coupleCode: string,
+    role: PartnerId,
+    pin: string,
+    remoteData?: RemoteCoupleRow | null
+  ): { success: boolean; error?: string } => {
+    const trimmed = coupleCode.trim().toUpperCase();
+    if (!trimmed.startsWith('HAZEL-') || trimmed.length < 6) {
+      return { success: false, error: 'Código de casita inválido' };
+    }
+
+    const currentCoupleData = remoteData?.couple_data || couple;
+    const targetPartner = currentCoupleData[role];
+
+    // Si tiene PIN configurado, validar que coincida
+    if (targetPartner.pin && targetPartner.pin.trim() !== '') {
+      if (targetPartner.pin.trim() !== pin.trim()) {
+        return { success: false, error: `PIN incorrecto. Ingresa el PIN correcto de ${targetPartner.name}` };
+      }
+    }
+
+    sound.playReveal();
+    confetti({
+      particleCount: 100,
+      spread: 80,
+      origin: { y: 0.5 },
+      colors: ['#FF6B8B', '#FFB7B2', '#FFE5D9', '#FFD166'],
+    });
+
+    const cleanPin = pin.trim() || targetPartner.pin || '1234';
+    const newUser: UserProfile = {
+      id: 'usr_' + Date.now(),
+      name: targetPartner.name,
+      avatar: targetPartner.avatar,
+      location: targetPartner.location || '',
+      timezone: targetPartner.timezone || 'GMT+1',
+      role,
+      pin: cleanPin,
+    };
+    setCurrentUser(newUser);
+
+    const updatedTargetPartner = {
+      ...targetPartner,
+      pin: cleanPin,
+    };
+
+    const updatedCouple: CoupleState = {
+      ...currentCoupleData,
+      activePartnerId: role,
+      [role]: updatedTargetPartner,
+    };
+
+    setCouple(updatedCouple);
+    if (remoteData?.house_data) setHouse(remoteData.house_data);
+    if (remoteData?.qa_data) setQA(remoteData.qa_data);
+
+    setPairing({
+      coupleCode: trimmed,
+      creatorName: updatedCouple.partner1.name,
+      creatorAvatar: updatedCouple.partner1.avatar,
+      partnerName: updatedCouple.partner2.name,
+      partnerAvatar: updatedCouple.partner2.avatar,
+      isLinked: true,
+      linkedAt: new Date().toISOString(),
+    });
+
+    // Si la cuenta no tenía PIN previo, sincronizar a Supabase para dejarlo protegido
+    if (!targetPartner.pin || targetPartner.pin.trim() === '') {
+      syncToRemoteCouple(
+        trimmed,
+        updatedCouple,
+        remoteData?.house_data || house,
+        remoteData?.qa_data || qa,
+        newUser.id
+      );
+    }
+
+    return { success: true };
+  }, [couple, house, qa]);
+
+  const registerAsPartner2 = useCallback(async (
+    coupleCode: string,
+    name: string,
+    avatar: string,
+    location: string,
+    pin: string,
+    remoteData?: RemoteCoupleRow | null
+  ): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = coupleCode.trim().toUpperCase();
+    if (!trimmed.startsWith('HAZEL-') || trimmed.length < 6) {
+      return { success: false, error: 'Código de casita inválido' };
+    }
+
+    sound.playReveal();
+    confetti({
+      particleCount: 100,
+      spread: 80,
+      origin: { y: 0.5 },
+      colors: ['#FF6B8B', '#FFB7B2', '#FFE5D9', '#FFD166'],
+    });
+
+    const cleanPin = pin.trim() || '1234';
+    const newUser: UserProfile = {
+      id: 'usr_' + Date.now(),
+      name: name.trim(),
+      avatar,
+      location: location.trim(),
+      timezone: 'GMT+1',
+      role: 'partner2',
+      pin: cleanPin,
+    };
+    setCurrentUser(newUser);
+
+    const baseCouple = remoteData?.couple_data || couple;
+    const baseHouse = remoteData?.house_data || house;
+    const baseQA = remoteData?.qa_data || qa;
+
+    const updatedCouple: CoupleState = {
+      ...baseCouple,
+      activePartnerId: 'partner2',
+      partner2: {
+        id: 'partner2',
+        name: name.trim(),
+        avatar,
+        location: location.trim(),
+        timezone: 'GMT+1',
+        statusMessage: '¡Me uní a nuestra casita! 💕',
+        pin: cleanPin,
+        currentMood: {
+          emoji: '🥰',
+          label: 'Feliz & Enamorada/o',
+          energy: 90,
+          note: '¡Acabo de unirme a nuestra casita!',
+          updatedAt: new Date().toISOString(),
+          color: '#B5EAD7',
+        },
+      },
+    };
+
+    setCouple(updatedCouple);
+    if (remoteData?.house_data) setHouse(remoteData.house_data);
+    if (remoteData?.qa_data) setQA(remoteData.qa_data);
+
+    setPairing({
+      coupleCode: trimmed,
+      creatorName: baseCouple.partner1.name,
+      creatorAvatar: baseCouple.partner1.avatar,
+      partnerName: name.trim(),
+      partnerAvatar: avatar,
+      isLinked: true,
+      linkedAt: new Date().toISOString(),
+    });
+
+    // Guardar en Supabase para que el Jugador 1 vea a su pareja conectada
+    await syncToRemoteCouple(trimmed, updatedCouple, baseHouse, baseQA, newUser.id);
+
+    return { success: true };
+  }, [couple, house, qa]);
 
   const logoutUser = useCallback(() => {
     sound.playPop();
@@ -367,6 +563,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       avatar: '🌸',
       location: 'Barcelona, España',
       timezone: 'GMT+2',
+      role: 'partner1',
+      pin: '1234',
     });
     setPairing({
       coupleCode: 'HAZEL-DEMO99',
@@ -393,6 +591,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ...prev,
       activePartnerId: id,
     }));
+    setCurrentUser((prev) => (prev ? { ...prev, role: id } : prev));
   }, []);
 
   const updatePartnerProfile = useCallback((partnerId: PartnerId, updates: Partial<Partner>) => {
@@ -404,33 +603,6 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       },
     }));
   }, []);
-
-  const updateMood = useCallback((emoji: string, label: string, energy: number, note: string, color: string) => {
-    sound.playPop();
-    const activeId = couple.activePartnerId;
-    const now = new Date().toISOString();
-
-    setCouple((prev) => {
-      const currentPartner = prev[activeId];
-      return {
-        ...prev,
-        [activeId]: {
-          ...currentPartner,
-          currentMood: {
-            emoji,
-            label,
-            energy,
-            note,
-            updatedAt: now,
-            color,
-          },
-        },
-      };
-    });
-
-    // Reward with hearts for sharing mood
-    addLoveCoins(10, 'Compartir tu estado de ánimo diario');
-  }, [couple.activePartnerId]);
 
   const addLoveCoins = useCallback((amount: number, reason?: string) => {
     sound.playHeartCollect();
@@ -469,6 +641,33 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     ]);
   }, []);
 
+  const updateMood = useCallback((emoji: string, label: string, energy: number, note: string, color: string) => {
+    sound.playPop();
+    const activeId = myRole;
+    const now = new Date().toISOString();
+
+    setCouple((prev) => {
+      const currentPartner = prev[activeId];
+      return {
+        ...prev,
+        [activeId]: {
+          ...currentPartner,
+          currentMood: {
+            emoji,
+            label,
+            energy,
+            note,
+            updatedAt: now,
+            color,
+          },
+        },
+      };
+    });
+
+    // Reward with hearts for sharing mood
+    addLoveCoins(10, 'Compartir tu estado de ánimo diario');
+  }, [myRole, addLoveCoins]);
+
   const spendLoveCoins = useCallback((amount: number): boolean => {
     if (couple.loveCoins < amount) return false;
     sound.playPop();
@@ -480,7 +679,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [couple.loveCoins]);
 
   const sendInteraction = useCallback((type: InteractionEvent['type'], customMessage?: string) => {
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     const fromName = couple[activeId].name;
     let defaultMsg = '';
 
@@ -525,13 +724,13 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ...prev,
       { id: effectId, type, message: customMessage || defaultMsg }
     ]);
-  }, [couple]);
+  }, [myRole, couple]);
 
   const addLoveNote = useCallback((text: string, sticker?: string) => {
     sound.playHeartCollect();
     const newNote: LoveNote = {
       id: 'note_' + Date.now(),
-      from: couple.activePartnerId,
+      from: myRole,
       text,
       sticker: sticker || '💌',
       createdAt: new Date().toISOString(),
@@ -544,7 +743,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
 
     addLoveCoins(15, 'Nota de amor enviada');
-  }, [couple.activePartnerId, addLoveCoins]);
+  }, [myRole, addLoveCoins]);
 
   const updateMeetupDate = useCallback((dateString: string | null) => {
     sound.playPop();
@@ -575,7 +774,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       origin: { y: 0.5 },
     });
 
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     const log: HouseActivityLog = {
       id: 'act_' + Date.now(),
       partnerId: activeId,
@@ -599,7 +798,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
 
     return true;
-  }, [house.rooms, couple.loveCoins, couple.activePartnerId, couple, spendLoveCoins]);
+  }, [house.rooms, couple.loveCoins, myRole, couple, spendLoveCoins]);
 
   const updateRoomTheme = useCallback((roomId: RoomId, wallColor: string, floorType: Room['floorType']) => {
     sound.playPop();
@@ -639,7 +838,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     sound.playPlaceItem();
     const rId = targetRoomId || house.currentRoomId;
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     const roomName = house.rooms[rId]?.name || 'Habitación';
 
     const newPlacedItem: PlacedFurniture = {
@@ -668,7 +867,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       placedItems: [...prev.placedItems, newPlacedItem],
       activityLogs: [log, ...prev.activityLogs.slice(0, 29)],
     }));
-  }, [furnitureCatalog, house.currentRoomId, house.rooms, couple.activePartnerId]);
+  }, [furnitureCatalog, house.currentRoomId, house.rooms, myRole]);
 
   const moveFurniture = useCallback((placedId: string, x: number, y: number) => {
     sound.playPop();
@@ -777,7 +976,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [house.placedItems, furnitureCatalog]);
 
   const submitAnswer = useCallback((questionId: string, text: string) => {
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     const now = new Date().toISOString();
     const existingRecord = qa.records[questionId] || {
       id: 'ans_' + Date.now(),
@@ -825,11 +1024,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         [questionId]: updatedRecord,
       },
     }));
-  }, [couple.activePartnerId, qa.records, allQuestions, addLoveCoins]);
+  }, [myRole, qa.records, allQuestions, addLoveCoins]);
 
   const addReactionToAnswer = useCallback((questionId: string, emoji: string) => {
     sound.playHeartCollect();
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     setQA((prev) => {
       const record = prev.records[questionId];
       if (!record) return prev;
@@ -847,11 +1046,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         },
       };
     });
-  }, [couple.activePartnerId]);
+  }, [myRole]);
 
   const createCustomQuestion = useCallback((title: string, prompt: string, category: QuestionCategory = 'custom') => {
     sound.playHeartCollect();
-    const activeId = couple.activePartnerId;
+    const activeId = myRole;
     const authorName = couple[activeId].name;
 
     const newQuestion: Question = {
@@ -873,7 +1072,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
 
     addLoveCoins(15, 'Crear pregunta personalizada');
-  }, [couple, addLoveCoins]);
+  }, [myRole, couple, addLoveCoins]);
 
   const setDailyQuestion = useCallback((questionId: string) => {
     sound.playPop();
@@ -904,6 +1103,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         pairing,
         loginUser,
         loginWithExistingCode,
+        loginAsExistingPartner,
+        registerAsPartner2,
         createCoupleInviteCode,
         joinCoupleByCode,
         logoutUser,

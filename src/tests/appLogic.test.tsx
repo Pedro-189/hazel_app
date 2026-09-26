@@ -256,4 +256,65 @@ describe('Hazel Couple App Logic & State Flow', () => {
     expect(result.current.house.rooms.living_room.wallColor).toBe('#FFEBE8');
     expect(result.current.house.rooms.living_room.floorType).toBe('carpet');
   });
+
+  it('should isolate player accounts and validate individual PIN authentication', () => {
+    const { result } = renderHook(() => useCouple(), { wrapper });
+
+    // Step 1: Create room as Jugador 1 with PIN 1234
+    act(() => {
+      result.current.loginUser('Valen', '🦊', 'Madrid', '1234');
+      result.current.createCoupleInviteCode();
+    });
+
+    const code = result.current.pairing.coupleCode;
+    expect(result.current.currentUser?.role).toBe('partner1');
+    expect(result.current.activePartner.name).toBe('Valen');
+
+    // Step 2: Attempting to log into partner1 with WRONG PIN should fail
+    act(() => {
+      const res = result.current.loginAsExistingPartner(code, 'partner1', '9999');
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('PIN incorrecto');
+    });
+
+    // Step 3: Logging into partner1 with CORRECT PIN should succeed
+    act(() => {
+      const res = result.current.loginAsExistingPartner(code, 'partner1', '1234');
+      expect(res.success).toBe(true);
+    });
+
+    expect(result.current.currentUser?.name).toBe('Valen');
+    expect(result.current.currentUser?.role).toBe('partner1');
+  });
+
+  it('should allow partner 2 to register with their own profile and PIN, enforcing role isolation', async () => {
+    const { result } = renderHook(() => useCouple(), { wrapper });
+
+    // Step 1: Register as Partner 2 with PIN 5678
+    await act(async () => {
+      const res = await result.current.registerAsPartner2(
+        'HAZEL-TEST1234',
+        'Camila',
+        '🐨',
+        'Buenos Aires',
+        '5678'
+      );
+      expect(res.success).toBe(true);
+    });
+
+    expect(result.current.currentUser?.role).toBe('partner2');
+    expect(result.current.activePartner.name).toBe('Camila');
+    expect(result.current.otherPartner.id).toBe('partner1');
+
+    // Step 2: Answer question as Camila (partner2)
+    act(() => {
+      result.current.submitAnswer('q_spicy_1', 'Nuestra primera cita.');
+    });
+
+    // Partner 2 answer is recorded, Partner 1 answer is still undefined (not revealed)
+    const rec = result.current.qa.records['q_spicy_1'];
+    expect(rec.partner2Answer).toBe('Nuestra primera cita.');
+    expect(rec.partner1Answer).toBeUndefined();
+    expect(rec.isRevealed).toBe(false);
+  });
 });
