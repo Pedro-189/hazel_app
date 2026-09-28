@@ -5,7 +5,19 @@ class SoundEngine {
   private muted: boolean = false;
 
   constructor() {
-    // AudioContext will be initialized on first user interaction
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          if (this.ctx && this.ctx.state === 'running') {
+            this.ctx.suspend().catch(() => {});
+          }
+        } else {
+          if (this.ctx && this.ctx.state === 'suspended' && !this.muted) {
+            this.ctx.resume().catch(() => {});
+          }
+        }
+      });
+    }
   }
 
   private initCtx() {

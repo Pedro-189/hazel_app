@@ -21,6 +21,7 @@ import {
   UserPlus
 } from 'lucide-react';
 import { sound } from '../../utils/audio';
+import { triggerHaptic } from '../../utils/haptics';
 import { isSupabaseConfigured } from '../../utils/supabaseClient';
 import { fetchRemoteCouple, RemoteCoupleRow } from '../../utils/supabaseSync';
 import { loadStoredData } from '../../utils/storage';
@@ -56,6 +57,8 @@ export const AuthScreen: React.FC = () => {
   const [foundCasita, setFoundCasita] = useState<RemoteCoupleRow | null>(null);
   const [selectedRole, setSelectedRole] = useState<PartnerId | 'new_partner2' | null>(null);
   const [loginPin, setLoginPin] = useState('');
+  const [failedPinAttempts, setFailedPinAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number>(0);
 
   // Partner 2 registration fields
   const [p2Name, setP2Name] = useState('');
@@ -130,6 +133,13 @@ export const AuthScreen: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
 
+    if (Date.now() < lockoutUntil) {
+      const remainingSec = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      setErrorMessage(`Demasiados intentos fallidos. Espera ${remainingSec} segundos por seguridad.`);
+      triggerHaptic('heavy');
+      return;
+    }
+
     if (!foundCasita || !selectedRole || selectedRole === 'new_partner2') return;
 
     if (!loginPin.trim()) {
@@ -145,7 +155,18 @@ export const AuthScreen: React.FC = () => {
     );
 
     if (!result.success) {
-      setErrorMessage(result.error || 'PIN incorrecto.');
+      const nextAttempts = failedPinAttempts + 1;
+      setFailedPinAttempts(nextAttempts);
+      triggerHaptic('heavy');
+      if (nextAttempts >= 5) {
+        setLockoutUntil(Date.now() + 30000);
+        setErrorMessage('Demasiados intentos fallidos. Acceso bloqueado temporalmente por 30 segundos por seguridad.');
+      } else {
+        setErrorMessage((result.error || 'PIN incorrecto.') + ` (Intento ${nextAttempts}/5)`);
+      }
+    } else {
+      setFailedPinAttempts(0);
+      triggerHaptic('success');
     }
   };
 

@@ -30,6 +30,7 @@ import {
   mergeQAState
 } from '../utils/supabaseSync';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
+import { triggerHaptic } from '../utils/haptics';
 
 interface CoupleContextValue {
   couple: CoupleState;
@@ -248,6 +249,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             else if (int.type === 'kiss') sound.playKiss();
             else if (int.type === 'heart_bomb') sound.playReveal();
             else sound.playPop();
+
+            triggerHaptic(int.type === 'hug' || int.type === 'kiss' || int.type === 'heart_bomb' ? 'heartbeat' : 'light');
           }
         }
       },
@@ -263,6 +266,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           else if (interactionBroadcast.type === 'kiss') sound.playKiss();
           else if (interactionBroadcast.type === 'heart_bomb') sound.playReveal();
           else sound.playPop();
+
+          triggerHaptic(interactionBroadcast.type === 'hug' || interactionBroadcast.type === 'kiss' || interactionBroadcast.type === 'heart_bomb' ? 'heartbeat' : 'light');
         }
       }
     );
@@ -727,6 +732,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Reward with hearts for sharing mood
     addLoveCoins(10, 'Compartir tu estado de ánimo diario');
+    triggerHaptic('light');
   }, [myRole, addLoveCoins]);
 
   const spendLoveCoins = useCallback((amount: number): boolean => {
@@ -785,6 +791,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ...prev,
       { id: effectId, type, message: customMessage || defaultMsg }
     ]);
+
+    triggerHaptic(type === 'hug' || type === 'kiss' || type === 'heart_bomb' ? 'heartbeat' : 'light');
 
     if (pairing.coupleCode) {
       broadcastFastInteraction(pairing.coupleCode, {
@@ -1087,8 +1095,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const hearts = questionMeta?.rewardHearts || 30;
       addLoveCoins(hearts, `¡Ambos respondieron: "${questionMeta?.title || 'Pregunta'}"!`);
       updatedRecord.rewardClaimed = true;
+      triggerHaptic('success');
     } else {
       sound.playPop();
+      triggerHaptic('light');
     }
 
     setQA((prev) => ({

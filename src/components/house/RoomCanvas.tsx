@@ -19,6 +19,9 @@ import {
   Move
 } from 'lucide-react';
 import { sound } from '../../utils/audio';
+import { triggerHaptic } from '../../utils/haptics';
+
+const GRID_CELL_INDICES = Array.from({ length: 63 }, (_, i) => i);
 
 interface RoomCanvasProps {
   onOpenStore: () => void;
@@ -145,6 +148,9 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (dragRef.current.isDragging) {
+      if (dragRef.current.hasMoved) {
+        triggerHaptic('light');
+      }
       dragRef.current.isDragging = false;
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
@@ -303,7 +309,7 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
           {/* Grid Tile Overlay when item is selected */}
           {selectedItemId && (
             <div className="absolute inset-0 grid grid-cols-9 grid-rows-7 pointer-events-none">
-              {Array.from({ length: 63 }).map((_, i) => {
+              {GRID_CELL_INDICES.map((i) => {
                 const col = i % GRID_COLS;
                 const row = Math.floor(i / GRID_COLS);
                 const isUnderSelected = selectedPlacedItem && selectedFurnitureMeta && (

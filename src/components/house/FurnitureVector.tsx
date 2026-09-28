@@ -6,7 +6,7 @@ interface FurnitureVectorProps {
   placed?: PlacedFurniture;
 }
 
-export const FurnitureVector: React.FC<FurnitureVectorProps> = ({ item, placed }) => {
+const FurnitureVectorComponent: React.FC<FurnitureVectorProps> = ({ item, placed }) => {
   const isOn = placed?.state?.isOn ?? true;
   const photoUrl = placed?.customPhotoUrl;
 
@@ -827,3 +827,5 @@ export const FurnitureVector: React.FC<FurnitureVectorProps> = ({ item, placed }
       );
   }
 };
+
+export const FurnitureVector = React.memo(FurnitureVectorComponent);

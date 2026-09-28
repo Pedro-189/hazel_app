@@ -26,25 +26,72 @@ const PRESET_ROMANTIC_PHOTOS = [
   },
 ];
 
+const compressImageFile = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 500;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.82);
+          resolve(compressed);
+        } else {
+          resolve(reader.result as string);
+        }
+      };
+      img.onerror = () => resolve(reader.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
 export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ placedId, onClose }) => {
   const { house, setCustomPhotoOnFrame } = useCouple();
   const placedItem = house.placedItems.find((p) => p.id === placedId);
 
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string>(placedItem?.customPhotoUrl || '');
   const [customNote, setCustomNote] = useState<string>(placedItem?.customNote || '');
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   if (!placedId || !placedItem) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setSelectedPhotoUrl(reader.result);
+      setIsCompressing(true);
+      try {
+        const compressedBase64 = await compressImageFile(file);
+        if (compressedBase64) {
+          setSelectedPhotoUrl(compressedBase64);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Error compressing image:', err);
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -94,10 +141,10 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ placedId, on
 
         {/* Upload Button or choose presets */}
         <div className="space-y-3">
-          <label className="flex items-center justify-center space-x-2 w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-dashed border-rose-300 rounded-2xl cursor-pointer transition-colors text-xs font-bold">
+          <label className={`flex items-center justify-center space-x-2 w-full py-2.5 ${isCompressing ? 'bg-stone-100 text-stone-400' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} border border-dashed border-rose-300 rounded-2xl cursor-pointer transition-colors text-xs font-bold`}>
             <Upload className="w-4 h-4" />
-            <span>Subir foto desde tu dispositivo</span>
-            <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+            <span>{isCompressing ? 'Optimizando foto...' : 'Subir foto desde tu dispositivo'}</span>
+            <input type="file" accept="image/*" disabled={isCompressing} onChange={handleFileUpload} className="hidden" />
           </label>
 
           <div>

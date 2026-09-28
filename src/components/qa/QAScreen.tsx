@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCouple } from '../../context/CoupleContext';
 import { Question, QuestionCategory } from '../../types/qa';
 import { 
@@ -39,8 +39,11 @@ export const QAScreen: React.FC = () => {
     { id: 'custom', label: 'Personalizadas', icon: '💌' },
   ];
 
-  const filteredQuestions = allQuestions.filter((q) =>
-    selectedCategory === 'all' ? true : q.category === selectedCategory
+  const filteredQuestions = useMemo(() =>
+    allQuestions.filter((q) =>
+      selectedCategory === 'all' ? true : q.category === selectedCategory
+    ),
+    [allQuestions, selectedCategory]
   );
 
   const dailyQuestion = allQuestions.find((q) => q.id === qa.dailyQuestionId) || allQuestions[0];
@@ -48,13 +51,16 @@ export const QAScreen: React.FC = () => {
 
   // Find questions where the OTHER partner has answered, but I haven't yet (Pending Challenge!)
   const isPartner1 = activePartner.id === 'partner1';
-  const pendingChallengeQuestion = allQuestions.find((q) => {
-    const rec = qa.records[q.id];
-    if (!rec || rec.isRevealed) return false;
-    const myAns = isPartner1 ? rec.partner1Answer : rec.partner2Answer;
-    const partnerAns = isPartner1 ? rec.partner2Answer : rec.partner1Answer;
-    return !myAns && !!partnerAns;
-  });
+  const pendingChallengeQuestion = useMemo(() =>
+    allQuestions.find((q) => {
+      const rec = qa.records[q.id];
+      if (!rec || rec.isRevealed) return false;
+      const myAns = isPartner1 ? rec.partner1Answer : rec.partner2Answer;
+      const partnerAns = isPartner1 ? rec.partner2Answer : rec.partner1Answer;
+      return !myAns && !!partnerAns;
+    }),
+    [allQuestions, qa.records, isPartner1]
+  );
 
   const getQuestionStatus = (questionId: string) => {
     const record = qa.records[questionId];
