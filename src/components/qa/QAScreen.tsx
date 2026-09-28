@@ -175,34 +175,72 @@ export const QAScreen: React.FC = () => {
           </button>
         </div>
 
-        {/* Featured: Pregunta del Día */}
+        {/* Featured: Sobre Postal Romántico con Sello de Lacre */}
         {dailyQuestion && (
           <div
             onClick={() => setActiveQuestion(dailyQuestion)}
-            className="relative bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 rounded-3xl p-5 text-white shadow-xl shadow-orange-200 cursor-pointer overflow-hidden group transition-transform active:scale-98"
+            className="relative bg-[#FAF5EE] border-2 border-[#E7D6C4] rounded-3xl p-5 shadow-xl shadow-stone-200/70 cursor-pointer overflow-hidden group transition-all hover:shadow-2xl active:scale-[0.99] select-none"
           >
-            <div className="flex items-center justify-between relative z-10">
-              <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-                <Flame className="w-3 h-3 text-amber-200 fill-amber-200" /> Pregunta del Día
-              </span>
-              <div className="flex items-center space-x-1 bg-white text-orange-600 px-2.5 py-0.5 rounded-full font-bold text-xs shadow-xs">
-                <Heart className="w-3.5 h-3.5 fill-current" />
-                <span>+{dailyQuestion.rewardHearts} ❤️</span>
+            {/* Vintage Airmail Border Accent */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-[repeating-linear-gradient(45deg,#E11D48,#E11D48_10px,#FAF5EE_10px,#FAF5EE_18px,#2563EB_18px,#2563EB_28px,#FAF5EE_28px,#FAF5EE_36px)] opacity-75" />
+
+            {/* Top Row: Postmark Stamp & Category */}
+            <div className="flex items-start justify-between relative z-10 pt-1">
+              <div className="flex items-center space-x-2">
+                <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300/80 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                  <Flame className="w-3 h-3 text-amber-600 fill-amber-600" /> Carta del Día
+                </span>
+                <span className="text-[10px] text-stone-500 font-semibold italic">
+                  Para {couple.partner1.name} & {couple.partner2.name}
+                </span>
+              </div>
+
+              {/* Romantic Vintage Stamp */}
+              <div className="border-2 border-dashed border-rose-300 bg-white/95 rounded-lg px-2 py-0.5 shadow-xs flex items-center space-x-1.5 rotate-2 group-hover:rotate-0 transition-transform">
+                <span className="text-xs">📮</span>
+                <div className="text-right">
+                  <span className="text-[8px] font-black tracking-widest text-rose-800 block uppercase leading-none">HAZEL POST</span>
+                  <span className="text-[10px] font-extrabold text-rose-600 leading-tight">+{dailyQuestion.rewardHearts} ❤️</span>
+                </div>
               </div>
             </div>
 
-            <h3 className="text-base font-bold mt-2.5 line-clamp-1 relative z-10">{dailyQuestion.title}</h3>
-            <p className="text-xs text-orange-50 mt-1 line-clamp-2 leading-relaxed relative z-10">
-              "{dailyQuestion.prompt}"
-            </p>
+            {/* Envelope Body with Question Title & Prompt */}
+            <div className="my-3 relative z-10">
+              <h3 className="text-base font-extrabold text-stone-800 line-clamp-1 group-hover:text-rose-600 transition-colors">
+                {dailyQuestion.title}
+              </h3>
+              <p className="text-xs text-stone-600 mt-1 line-clamp-2 italic leading-relaxed bg-white/80 p-2.5 rounded-2xl border border-stone-200/70 shadow-inner">
+                "{dailyQuestion.prompt}"
+              </p>
+            </div>
 
-            <div className="mt-4 flex items-center justify-between relative z-10 pt-2 border-t border-white/20 text-xs">
-              <span className="text-[11px] font-medium text-orange-100 flex items-center gap-1">
-                {dailyRecord?.isRevealed ? '✨ Revelada juntos' : '🔒 Revelación ciega'}
-              </span>
-              <span className="font-bold bg-white text-orange-600 px-3 py-1 rounded-xl shadow-sm group-hover:bg-orange-50 transition-colors">
-                Responder Ahora →
-              </span>
+            {/* Bottom Row: 3D Wax Seal & Interactive Button */}
+            <div className="mt-2 pt-3 border-t border-[#E8DACB] flex items-center justify-between relative z-10">
+              {/* 3D Wax Seal with embossed Heart */}
+              <div className="flex items-center space-x-2.5">
+                <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-red-600 via-rose-700 to-amber-950 shadow-md shadow-rose-900/30 flex items-center justify-center border-2 border-red-400/50 group-hover:scale-110 transition-transform">
+                  <div className="absolute inset-0.5 rounded-full border border-dashed border-red-300/40" />
+                  <Heart className="w-4 h-4 fill-white text-white drop-shadow-xs animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-[9px] font-extrabold uppercase tracking-wide text-rose-800 block">
+                    {dailyRecord?.isRevealed ? 'Sello Abierto' : 'Sello de Lacre'}
+                  </span>
+                  <span className="text-[11px] font-semibold text-stone-600">
+                    {dailyRecord?.isRevealed ? '¡Ambos leyeron! ✨' : 'Revelación secreta 🔒'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-200 group-hover:shadow-lg transition-all flex items-center gap-1.5"
+              >
+                <span>{dailyRecord?.isRevealed ? 'Ver Carta' : 'Abrir Sobre'}</span>
+                <span className="text-xs">→</span>
+              </button>
             </div>
           </div>
         )}

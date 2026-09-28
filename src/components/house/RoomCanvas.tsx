@@ -213,6 +213,11 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
     }
   };
 
+  const currentHour = new Date().getHours();
+  const isNight = currentHour >= 21 || currentHour < 6;
+  const isSunset = currentHour >= 18 && currentHour < 21;
+  const isMorning = currentHour >= 6 && currentHour < 10;
+
   return (
     <div className="flex flex-col h-full relative select-none bg-stone-100">
       {/* Room Header Info */}
@@ -262,38 +267,95 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
         style={{ backgroundColor: currentRoom.wallColor }}
         className="relative flex-1 w-full overflow-hidden flex flex-col justify-end transition-colors duration-500 shadow-inner"
       >
-        {/* Cozy Ambient Light Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-amber-100/35 via-transparent to-stone-900/10 pointer-events-none z-1" />
+        {/* Cozy Ambient Light Gradient (Warmer at sunset/night) */}
+        <div className={`absolute inset-0 pointer-events-none z-1 ${
+          isNight
+            ? 'bg-gradient-to-b from-indigo-950/25 via-stone-900/15 to-stone-900/25'
+            : isSunset
+            ? 'bg-gradient-to-b from-amber-400/20 via-rose-300/10 to-stone-900/10'
+            : 'bg-gradient-to-b from-amber-100/35 via-transparent to-stone-900/10'
+        }`} />
 
         {/* Windows and Sky Wall Decor */}
-        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-45">
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-85">
           <div className="w-full flex justify-around pt-3">
-            {/* Window 1 with sunbeam */}
-            <div className="w-16 h-20 bg-sky-200/80 rounded-t-full border-4 border-white/90 shadow-md flex items-center justify-center relative overflow-hidden">
-              <div className="absolute top-2 right-2 w-4 h-4 bg-amber-300 rounded-full animate-pulse" />
-              <div className="w-full h-0.5 bg-white absolute" />
-              <div className="h-full w-0.5 bg-white absolute" />
+            {/* Window 1 with dynamic celestial sky */}
+            <div className={`w-16 h-20 rounded-t-full border-4 border-white/95 shadow-md flex items-center justify-center relative overflow-hidden transition-colors duration-700 ${
+              isNight
+                ? 'bg-gradient-to-b from-[#0F172A] via-[#1E293B] to-[#334155]'
+                : isSunset
+                ? 'bg-gradient-to-b from-orange-400 via-rose-400 to-amber-200'
+                : isMorning
+                ? 'bg-gradient-to-b from-sky-300 via-amber-100 to-rose-100'
+                : 'bg-gradient-to-b from-sky-300 to-sky-100'
+            }`}>
+              {isNight ? (
+                <>
+                  <div className="absolute top-2 right-2 text-xs filter drop-shadow-sm animate-pulse">🌙</div>
+                  <div className="absolute bottom-2 left-2 text-[8px] text-amber-200 opacity-80 animate-pulse">✨</div>
+                  <div className="absolute top-4 left-3 text-[6px] text-white opacity-60">✨</div>
+                </>
+              ) : isSunset ? (
+                <>
+                  <div className="absolute bottom-2 right-2 w-5 h-5 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full shadow-sm animate-pulse" />
+                  <div className="absolute top-2 left-1 w-6 h-1.5 bg-rose-200/60 rounded-full blur-[0.5px]" />
+                </>
+              ) : isMorning ? (
+                <>
+                  <div className="absolute top-3 right-2 w-4 h-4 bg-amber-300 rounded-full animate-pulse shadow-sm" />
+                  <div className="absolute bottom-3 left-1 w-7 h-1.5 bg-white/70 rounded-full" />
+                </>
+              ) : (
+                <>
+                  <div className="absolute top-2 right-2 w-4 h-4 bg-amber-300 rounded-full animate-pulse shadow-sm" />
+                  <div className="absolute bottom-4 left-2 w-6 h-2 bg-white/80 rounded-full" />
+                </>
+              )}
+              {/* Window Panes */}
+              <div className="w-full h-0.5 bg-white/90 absolute" />
+              <div className="h-full w-0.5 bg-white/90 absolute" />
             </div>
 
             {/* Window 2 */}
-            <div className="w-14 h-16 bg-sky-200/80 rounded-t-full border-4 border-white/90 shadow-md flex items-center justify-center relative overflow-hidden">
-              <div className="w-full h-0.5 bg-white absolute" />
-              <div className="h-full w-0.5 bg-white absolute" />
+            <div className={`w-14 h-16 rounded-t-full border-4 border-white/95 shadow-md flex items-center justify-center relative overflow-hidden transition-colors duration-700 ${
+              isNight
+                ? 'bg-gradient-to-b from-[#0F172A] via-[#1E293B] to-[#334155]'
+                : isSunset
+                ? 'bg-gradient-to-b from-orange-400 via-rose-400 to-amber-200'
+                : isMorning
+                ? 'bg-gradient-to-b from-sky-300 via-amber-100 to-rose-100'
+                : 'bg-gradient-to-b from-sky-300 to-sky-100'
+            }`}>
+              {isNight && (
+                <div className="absolute top-3 left-3 text-[7px] text-amber-100 opacity-90 animate-pulse">✨</div>
+              )}
+              <div className="w-full h-0.5 bg-white/90 absolute" />
+              <div className="h-full w-0.5 bg-white/90 absolute" />
             </div>
           </div>
 
-          {/* Couple Avatars Floating in Room */}
-          <div className="w-full flex justify-between px-5 pb-20 opacity-80 pointer-events-none">
-            <div className="flex items-center space-x-1 bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded-full text-[10px] text-stone-700 shadow-xs border border-rose-100 animate-bounce-slow">
-              <span>{couple.partner1.avatar}</span>
-              <span className="font-bold">{couple.partner1.name}</span>
+          {/* Couple Avatars Floating in Room with Mood Thought Bubbles */}
+          <div className="w-full flex justify-between px-4 pb-20 opacity-90 pointer-events-none z-5">
+            <div className="flex items-center space-x-1.5 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] text-stone-700 shadow-md border border-rose-200 animate-bounce-slow">
+              <span className="text-sm">{couple.partner1.avatar}</span>
+              <span className="font-extrabold text-stone-800">{couple.partner1.name}</span>
+              {couple.partner1.currentMood?.emoji && (
+                <span className="ml-1 px-1.5 py-0.2 bg-rose-50 border border-rose-200/80 rounded-full text-[10px]" title={couple.partner1.currentMood.label}>
+                  {couple.partner1.currentMood.emoji}
+                </span>
+              )}
             </div>
             <div 
-              className="flex items-center space-x-1 bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded-full text-[10px] text-stone-700 shadow-xs border border-rose-100 animate-bounce-slow" 
+              className="flex items-center space-x-1.5 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] text-stone-700 shadow-md border border-rose-200 animate-bounce-slow" 
               style={{ animationDelay: '1.2s' }}
             >
-              <span>{couple.partner2.avatar}</span>
-              <span className="font-bold">{couple.partner2.name}</span>
+              <span className="text-sm">{couple.partner2.avatar}</span>
+              <span className="font-extrabold text-stone-800">{couple.partner2.name}</span>
+              {couple.partner2.currentMood?.emoji && (
+                <span className="ml-1 px-1.5 py-0.2 bg-rose-50 border border-rose-200/80 rounded-full text-[10px]" title={couple.partner2.currentMood.label}>
+                  {couple.partner2.currentMood.emoji}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -395,6 +457,20 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
                     : 'hover:scale-102'
                 }`}
               >
+                {/* Cozy Ground Contact Shadow */}
+                <div
+                  style={{ transform: `rotate(-${placed.rotation}deg)` }}
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-[76%] h-[18%] bg-stone-900/15 rounded-[100%] blur-[2px] pointer-events-none -z-10"
+                />
+
+                {/* Warm Radial Glow for Turned-On Lamp */}
+                {meta.specialAction === 'turn_on_light' && placed.state?.isOn && (
+                  <div
+                    style={{ transform: `rotate(-${placed.rotation}deg)` }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220%] h-[220%] bg-[radial-gradient(circle,rgba(253,224,71,0.4)_0%,rgba(253,224,71,0.12)_45%,transparent_75%)] pointer-events-none -z-10 animate-pulse"
+                  />
+                )}
+
                 <FurnitureVector item={meta} placed={placed} />
 
                 {/* Placement Tag Badge */}
