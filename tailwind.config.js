@@ -34,7 +34,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['"Quicksand"', '"Nunito"', 'system-ui', 'sans-serif'],
+        sans: ['"Plus Jakarta Sans"', '"Nunito"', 'system-ui', 'sans-serif'],
+        serif: ['"Fraunces"', 'Georgia', 'serif'],
         handwriting: ['"Caveat"', '"Indie Flower"', 'cursive', 'sans-serif'],
       },
       animation: {

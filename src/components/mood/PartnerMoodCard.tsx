@@ -46,7 +46,7 @@ export const PartnerMoodCard: React.FC<PartnerMoodCardProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-bold text-stone-800">{partner.name}</h3>
+              <h3 className="text-base font-serif font-bold text-stone-800">{partner.name}</h3>
               {isMe && (
                 <span className="text-[9px] font-bold px-2 py-0.5 bg-rose-500 text-white rounded-full">
                   Tú
@@ -57,7 +57,7 @@ export const PartnerMoodCard: React.FC<PartnerMoodCardProps> = ({
               <MapPin className="w-3 h-3 text-stone-400" />
               <span className="truncate max-w-[140px]">{partner.location}</span>
               <span className="text-stone-300">•</span>
-              <span className="text-[10px]">{partner.timezone}</span>
+              <span className="text-[10px] font-mono text-stone-400">{partner.timezone}</span>
             </div>
           </div>
         </div>
@@ -67,7 +67,7 @@ export const PartnerMoodCard: React.FC<PartnerMoodCardProps> = ({
           <div className="text-3xl filter drop-shadow-sm animate-bounce-slow">
             {currentMood.emoji}
           </div>
-          <span className="text-[10px] text-stone-400 mt-1 flex items-center gap-0.5">
+          <span className="text-[10px] text-stone-400 mt-1 flex items-center gap-0.5 font-medium">
             <Clock className="w-2.5 h-2.5" />
             {timeAgo(currentMood.updatedAt)}
           </span>
@@ -77,14 +77,14 @@ export const PartnerMoodCard: React.FC<PartnerMoodCardProps> = ({
       {/* Mood Title & Note */}
       <div className="mt-3 bg-white/90 backdrop-blur-xs p-3 rounded-2xl border border-white/60 shadow-xs space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-stone-800 flex items-center gap-1">
+          <span className="text-xs font-serif font-bold text-stone-800 flex items-center gap-1">
             <span>{currentMood.emoji}</span>
             <span>{currentMood.label}</span>
           </span>
         </div>
 
         {currentMood.note ? (
-          <p className="text-xs text-stone-600 italic font-sans leading-relaxed">
+          <p className="text-base text-stone-700 font-handwriting leading-snug bg-amber-50/40 p-2.5 rounded-xl border border-amber-100/60 shadow-inner">
             "{currentMood.note}"
           </p>
         ) : (

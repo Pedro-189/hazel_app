@@ -28,7 +28,7 @@ export const TopBar: React.FC = () => {
             <span className="text-[8px] text-stone-400 block leading-tight font-medium">
               {activePartner.id === 'partner1' ? 'Jugador 1' : 'Jugador 2'}
             </span>
-            <span className="text-[11px] font-bold text-rose-700 leading-tight block truncate max-w-[75px]">
+            <span className="text-[12px] font-serif font-bold text-rose-800 leading-tight block truncate max-w-[85px]">
               {activePartner.name}
             </span>
           </div>

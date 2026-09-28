@@ -94,7 +94,7 @@ export const MemoryScreen: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Nuestra Historia</span>
-            <h2 className="text-base font-extrabold text-stone-800 flex items-center gap-1.5">
+            <h2 className="text-base font-serif font-bold text-stone-800 flex items-center gap-1.5 tracking-tight">
               Recuerdos & Buzón 💌
             </h2>
           </div>
@@ -253,10 +253,10 @@ export const MemoryScreen: React.FC = () => {
               <Heart className="w-4 h-4 fill-white" />
             </div>
             <div className="my-2">
-              <span className="text-3xl font-black">{diffDays}</span>
+              <span className="text-3xl font-serif font-black">{diffDays}</span>
               <span className="text-xs font-bold text-rose-100 block">Días de Amor</span>
             </div>
-            <span className="text-[10px] text-rose-100">
+            <span className="text-[10px] text-rose-100 font-medium">
               {couple.partner1.name} & {couple.partner2.name} 💕
             </span>
           </div>
@@ -273,22 +273,22 @@ export const MemoryScreen: React.FC = () => {
             <div className="my-2">
               {daysToMeetup !== null && daysToMeetup > 0 ? (
                 <>
-                  <span className="text-3xl font-black text-stone-800">{daysToMeetup}</span>
+                  <span className="text-3xl font-serif font-black text-stone-800">{daysToMeetup}</span>
                   <span className="text-xs font-bold text-amber-600 block">Días para vernos</span>
                 </>
               ) : daysToMeetup === 0 ? (
                 <>
-                  <span className="text-2xl font-black text-rose-500">¡HOY! 🎉</span>
+                  <span className="text-2xl font-serif font-black text-rose-500">¡HOY! 🎉</span>
                   <span className="text-xs font-bold text-stone-600 block">El gran reencuentro</span>
                 </>
               ) : (
                 <>
-                  <span className="text-lg font-bold text-stone-400">Sin fecha</span>
-                  <span className="text-[10px] text-stone-400 block">Toca para definir</span>
+                  <span className="text-lg font-serif font-bold text-stone-400">Sin fecha</span>
+                  <span className="text-[10px] text-stone-400 block font-medium">Toca para definir</span>
                 </>
               )}
             </div>
-            <span className="text-[10px] text-stone-400">Toca para cambiar fecha</span>
+            <span className="text-[10px] text-stone-400 font-medium">Toca para cambiar fecha</span>
           </div>
         </div>
 
@@ -298,7 +298,7 @@ export const MemoryScreen: React.FC = () => {
             onSubmit={handleSaveMeetupDate}
             className="p-4 bg-amber-50 border border-amber-200 rounded-3xl space-y-3 animate-in fade-in duration-150"
           >
-            <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+            <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5 font-serif">
               <Calendar className="w-3.5 h-3.5 text-amber-600" />
               <span>Definir fecha de la próxima visita:</span>
             </h4>
@@ -329,11 +329,11 @@ export const MemoryScreen: React.FC = () => {
         {/* Love Notes Mailbox (Cartitas de Amor) */}
         <div className="bg-white rounded-3xl p-4 border border-stone-200/80 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+            <h4 className="text-sm font-serif font-bold text-stone-800 flex items-center gap-1.5 tracking-tight">
               <Mail className="w-4 h-4 text-rose-500" />
               <span>Buzón de Cartitas de Amor</span>
             </h4>
-            <span className="text-[10px] text-stone-400">{couple.loveNotes.length} cartitas</span>
+            <span className="text-[10px] text-stone-400 font-medium">{couple.loveNotes.length} cartitas</span>
           </div>
 
           {/* New Letter Composer */}
@@ -344,7 +344,7 @@ export const MemoryScreen: React.FC = () => {
                 onChange={(e) => setNoteText(e.target.value)}
                 placeholder={`Escribe una cartita dulce para ${otherPartner.name}...`}
                 rows={3}
-                className="w-full p-3 text-xs bg-stone-50 border border-stone-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:bg-white resize-none font-handwriting text-sm"
+                className="w-full p-3.5 bg-[#FCFBF7] border border-stone-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:bg-white resize-none font-handwriting text-lg text-stone-800 leading-snug shadow-inner"
                 required
               />
             </div>
@@ -378,37 +378,43 @@ export const MemoryScreen: React.FC = () => {
           </form>
 
           {/* Letters List */}
-          <div className="space-y-2.5 pt-2">
+          <div className="space-y-3 pt-2">
             {couple.loveNotes.length === 0 ? (
-              <p className="text-xs text-stone-400 text-center py-4">
+              <p className="text-xs text-stone-400 text-center py-4 font-sans">
                 El buzón está vacío. ¡Sorprende a tu amor con una carta!
               </p>
             ) : (
-              couple.loveNotes.map((note) => {
+              couple.loveNotes.map((note, index) => {
                 const sender = note.from === 'partner1' ? couple.partner1 : couple.partner2;
                 const isFromMe = note.from === activePartner.id;
                 const timeStr = new Date(note.createdAt).toLocaleDateString([], {
                   month: 'short',
                   day: 'numeric',
                 });
+                const isEven = index % 2 === 0;
 
                 return (
                   <div
                     key={note.id}
-                    className={`p-3 rounded-2xl border transition-all ${
+                    className={`p-3.5 rounded-2xl border transition-all relative overflow-hidden group hover:rotate-0 ${
+                      isEven ? 'rotate-[-0.6deg]' : 'rotate-[0.6deg]'
+                    } ${
                       isFromMe
-                        ? 'bg-rose-50/50 border-rose-100'
-                        : 'bg-amber-50/60 border-amber-100 shadow-xs'
+                        ? 'bg-[#FFFDFB] border-rose-200/90 shadow-xs'
+                        : 'bg-[#FEFCF4] border-amber-200/90 shadow-xs'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 mb-1">
-                      <span className="flex items-center gap-1">
-                        <span>{note.sticker}</span>
-                        <span>De {sender.name} {sender.avatar}</span>
+                    {/* Washi tape header accent */}
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-amber-200/40 backdrop-blur-xs rounded-xs border border-amber-300/30" />
+
+                    <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 mb-1 pt-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-base">{note.sticker}</span>
+                        <span className="font-serif">De {sender.name} {sender.avatar}</span>
                       </span>
-                      <span className="text-[10px] text-stone-400">{timeStr}</span>
+                      <span className="text-[10px] text-stone-400 font-mono">{timeStr}</span>
                     </div>
-                    <p className="text-xs text-stone-800 font-handwriting text-sm leading-relaxed">
+                    <p className="text-stone-800 font-handwriting text-lg leading-snug">
                       {note.text}
                     </p>
                   </div>

@@ -86,7 +86,7 @@ export const QAScreen: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Minijuego</span>
-            <h2 className="text-base font-extrabold text-stone-800 flex items-center gap-1.5">
+            <h2 className="text-base font-serif font-bold text-stone-800 flex items-center gap-1.5 tracking-tight">
               Conóceme Más 💕
             </h2>
           </div>
@@ -207,10 +207,10 @@ export const QAScreen: React.FC = () => {
 
             {/* Envelope Body with Question Title & Prompt */}
             <div className="my-3 relative z-10">
-              <h3 className="text-base font-extrabold text-stone-800 line-clamp-1 group-hover:text-rose-600 transition-colors">
+              <h3 className="text-base font-serif font-bold text-stone-800 line-clamp-1 group-hover:text-rose-600 transition-colors">
                 {dailyQuestion.title}
               </h3>
-              <p className="text-xs text-stone-600 mt-1 line-clamp-2 italic leading-relaxed bg-white/80 p-2.5 rounded-2xl border border-stone-200/70 shadow-inner">
+              <p className="text-xs text-stone-600 mt-1 line-clamp-2 italic leading-relaxed bg-white/80 p-2.5 rounded-2xl border border-stone-200/70 shadow-inner font-serif">
                 "{dailyQuestion.prompt}"
               </p>
             </div>

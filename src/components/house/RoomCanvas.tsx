@@ -225,9 +225,9 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
         <div className="flex items-center space-x-2">
           <span className="text-2xl drop-shadow-xs">{currentRoom.icon}</span>
           <div>
-            <h2 className="text-xs font-black text-stone-800 flex items-center gap-1.5">
+            <h2 className="text-sm font-serif font-bold text-stone-800 flex items-center gap-1.5 tracking-tight">
               <span>{currentRoom.name}</span>
-              <span className="text-[10px] font-bold px-2 py-0.2 bg-rose-100 text-rose-700 rounded-full">
+              <span className="text-[10px] font-sans font-bold px-2 py-0.2 bg-rose-100 text-rose-700 rounded-full">
                 {placedInRoom.length} {placedInRoom.length === 1 ? 'mueble' : 'muebles'}
               </span>
             </h2>
